@@ -68,6 +68,16 @@ RouRouMusic (肉肉音乐) 是一款专门为 Android TV 开发的 [XiaoMusic](h
 
 ---
 
+## ☕ 赞赏支持
+
+如果您觉得这个项目对您有所帮助，欢迎请作者喝杯奶茶。您的支持是我持续维护和开发新功能的动力！
+
+<div align="left">
+  <img src="donate.png" width="250" title="请喝杯奶茶">
+</div>
+
+---
+
 ## 📄 开源协议
 
 本项目采用 [MIT License](LICENSE) 协议。
