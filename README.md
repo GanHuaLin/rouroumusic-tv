@@ -2,6 +2,8 @@
 
 RouRouMusic (肉肉音乐) 是一款专门为 Android TV 开发的 [XiaoMusic](https://github.com/hanxi/xiaomusic) 原生客户端。它旨在为电视大屏幕提供极致的音乐播放体验，完美适配遥控器操作，拥有精美的毛玻璃视觉效果和歌词显示功能。
 
+https://github.com/GanHuaLin/rouroumusic-tv
+
 ---
 
 ## ✨ 功能特点
