@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_app_gradient">
+
+    <!-- Left Panel: Branding -->
+    <LinearLayout
+        android:id="@+id/panelLeft"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="48dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintWidth_percent="0.42"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <ImageView
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:src="@drawable/ic_logo"
+            android:contentDescription="Logo"
+            android:layout_marginBottom="24dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="肉肉音乐"
+            android:textColor="#FFFFFF"
+            android:textSize="40sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="12dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="连接你的音乐服务（XiaoMusic）"
+            android:textColor="#9CA3AF"
+            android:textSize="16sp"
+            android:gravity="center"
+            android:layout_marginBottom="40dp" />
+
+        <!-- Mode Toggle Button -->
+        <Button
+            android:id="@+id/btnToggleMode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="扫码登录"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/bg_btn_primary"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:focusable="true"
+            android:nextFocusRight="@+id/etUrl" />
+
+    </LinearLayout>
+
+    <!-- Divider -->
+    <View
+        android:id="@+id/divider"
+        android:layout_width="1dp"
+        android:layout_height="0dp"
+        android:background="#2D2D54"
+        android:layout_marginTop="48dp"
+        android:layout_marginBottom="48dp"
+        app:layout_constraintStart_toEndOf="@+id/panelLeft"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- Right Panel: Form -->
+    <LinearLayout
+        android:id="@+id/panelRight"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:paddingStart="56dp"
+        android:paddingEnd="56dp"
+        app:layout_constraintStart_toEndOf="@+id/divider"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <!-- Manual Login Container -->
+        <LinearLayout
+            android:id="@+id/layoutManual"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="visible">
+
+
+        <!-- Server URL -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="服务地址"
+            android:textColor="#9CA3AF"
+            android:textSize="13sp"
+            android:layout_marginBottom="6dp" />
+
+        <EditText
+            android:id="@+id/etUrl"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:background="@drawable/bg_input_field"
+            android:hint="http://192.168.1.x:58090"
+            android:inputType="textUri"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:textColor="#FFFFFF"
+            android:textColorHint="#4B5563"
+            android:textSize="15sp"
+            android:singleLine="true"
+            android:imeOptions="actionNext"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusDown="@+id/etUsername"
+            android:nextFocusUp="@+id/btnConnect"
+            android:nextFocusLeft="@+id/btnToggleMode"
+            android:nextFocusRight="@+id/etUrl"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Username -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="用户名（无需认证可留空）"
+            android:textColor="#9CA3AF"
+            android:textSize="13sp"
+            android:layout_marginBottom="6dp" />
+
+        <EditText
+            android:id="@+id/etUsername"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:background="@drawable/bg_input_field"
+            android:hint="Username"
+            android:inputType="textPersonName"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:textColor="#FFFFFF"
+            android:textColorHint="#4B5563"
+            android:textSize="15sp"
+            android:singleLine="true"
+            android:imeOptions="actionNext"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusDown="@+id/etPassword"
+            android:nextFocusUp="@+id/etUrl"
+            android:nextFocusLeft="@+id/btnToggleMode"
+            android:nextFocusRight="@+id/etUsername"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Password -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="密码（无需认证可留空）"
+            android:textColor="#9CA3AF"
+            android:textSize="13sp"
+            android:layout_marginBottom="6dp" />
+
+        <EditText
+            android:id="@+id/etPassword"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:background="@drawable/bg_input_field"
+            android:hint="Password"
+            android:inputType="textPassword"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:textColor="#FFFFFF"
+            android:textColorHint="#4B5563"
+            android:textSize="15sp"
+            android:singleLine="true"
+            android:imeOptions="actionDone"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusDown="@+id/btnConnect"
+            android:nextFocusUp="@+id/etUsername"
+            android:nextFocusLeft="@+id/btnToggleMode"
+            android:nextFocusRight="@+id/etPassword"
+            android:layout_marginBottom="28dp" />
+
+        <!-- Connect Button -->
+        <Button
+            android:id="@+id/btnConnect"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:background="@drawable/bg_btn_primary"
+            android:text="连　接"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:stateListAnimator="@null"
+            android:focusable="true"
+            android:nextFocusDown="@+id/etUrl"
+            android:nextFocusUp="@+id/etPassword"
+            android:nextFocusLeft="@+id/btnToggleMode"
+            android:nextFocusRight="@+id/btnConnect">
+            <requestFocus />
+        </Button>
+        </LinearLayout>
+
+        <!-- QR Login Container -->
+        <LinearLayout
+            android:id="@+id/layoutQr"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:visibility="gone">
+
+            <FrameLayout
+                android:layout_width="240dp"
+                android:layout_height="240dp"
+                android:background="@drawable/bg_input_field"
+                android:padding="12dp">
+
+                <ImageView
+                    android:id="@+id/ivQrCode"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="fitCenter" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/tvScanHint"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="手机扫码快速登录"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:layout_marginTop="24dp" />
+
+            <TextView
+                android:id="@+id/tvIpAddress"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="正在获取地址..."
+                android:textColor="#9CA3AF"
+                android:textSize="14sp"
+                android:layout_marginTop="8dp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

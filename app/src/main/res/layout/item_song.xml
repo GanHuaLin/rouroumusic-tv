@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/item_song_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="8dp"
+    android:layout_marginBottom="4dp"
+    android:gravity="center_vertical"
+    android:background="@drawable/selector_item_bg"
+    android:clickable="true"
+    android:focusable="true"
+    android:nextFocusLeft="@+id/rvPlaylists"
+    android:descendantFocusability="afterDescendants">
+
+    <FrameLayout
+        android:layout_width="32dp"
+        android:layout_height="32dp">
+        
+        <TextView
+            android:id="@+id/tvIndex"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="1"
+            android:textColor="#6B7280"
+            android:fontFamily="monospace"
+            android:textSize="14sp"/>
+
+        <ImageView
+            android:id="@+id/ivEqualizer"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_equalizer"
+            android:visibility="gone"
+            android:tint="#FFFFFF"
+            android:contentDescription="playing"/>
+    </FrameLayout>
+
+    <ImageView
+        android:id="@+id/ivCover"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/bg_cover_rounded"
+        android:clipToOutline="true"
+        android:scaleType="centerCrop"
+        android:contentDescription="cover"/>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginStart="12dp"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/tvSongName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Song Title"
+            android:textColor="#F3F4F6"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end"/>
+
+        <TextView
+            android:id="@+id/tvArtist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Unknown Artist"
+            android:textColor="#6B7280"
+            android:textSize="12sp"
+            android:maxLines="1"
+            android:ellipsize="end"/>
+
+    </LinearLayout>
+
+    <!-- Action Buttons -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginStart="8dp">
+
+        <ImageButton
+            android:id="@+id/btnItemPlay"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/btn_focused_circle"
+            android:src="@drawable/ic_play"
+            android:scaleType="fitCenter"
+            android:padding="6dp"
+            android:tint="#E5E7EB"
+            android:focusable="true"
+            android:contentDescription="play"/>
+
+        <ImageButton
+            android:id="@+id/btnItemFullscreen"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/btn_focused_circle"
+            android:src="@drawable/ic_fullscreen"
+            android:scaleType="fitCenter"
+            android:padding="6dp"
+            android:tint="#E5E7EB"
+            android:focusable="true"
+            android:contentDescription="fullscreen"/>
+
+        <ImageButton
+            android:id="@+id/btnItemFav"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/btn_focused_circle"
+            android:src="@drawable/ic_favorite_border"
+            android:scaleType="fitCenter"
+            android:padding="6dp"
+            android:tint="#E5E7EB"
+            android:focusable="true"
+            android:contentDescription="favorite"/>
+
+        <ImageButton
+            android:id="@+id/btnItemDelete"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="@drawable/btn_focused_circle"
+            android:src="@drawable/ic_delete"
+            android:scaleType="fitCenter"
+            android:padding="6dp"
+            android:tint="#E5E7EB"
+            android:focusable="true"
+            android:contentDescription="delete"/>
+
+    </LinearLayout>
+
+</LinearLayout>
