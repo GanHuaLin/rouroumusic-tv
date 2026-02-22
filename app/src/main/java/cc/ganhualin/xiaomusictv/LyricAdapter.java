@@ -25,7 +25,13 @@ public class LyricAdapter extends RecyclerView.Adapter<LyricAdapter.LyricViewHol
     private int currentIndex = -1;
 
     public void setLyrics(List<LyricLine> lyrics) {
-        this.lyrics = lyrics;
+        List<LyricLine> padded = new ArrayList<>();
+        if (lyrics != null && !lyrics.isEmpty()) {
+            padded.add(new LyricLine(-1, ""));
+            padded.addAll(lyrics);
+            padded.add(new LyricLine(Long.MAX_VALUE, ""));
+        }
+        this.lyrics = padded;
         notifyDataSetChanged();
     }
 

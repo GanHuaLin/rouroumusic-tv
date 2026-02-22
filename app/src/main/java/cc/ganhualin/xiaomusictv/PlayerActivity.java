@@ -46,8 +46,8 @@ public class PlayerActivity extends AppCompatActivity {
     private TextView tvNoLyrics; 
     private SeekBar progressBar; // Changed to SeekBar
     private TextView tvCurrentTime, tvDuration;
-    private TextView tvTooltip, tvPlaylistName, tvPlaylistCount;
-    private android.widget.LinearLayout layoutTooltip;
+    private TextView tvTooltip, tvSeekProgress, tvPlaylistName, tvPlaylistCount;
+    private android.widget.LinearLayout layoutTooltip, layoutSeekProgress;
     private ImageButton btnRepeat, btnPrev, btnPlayPause, btnNext, btnFav, btnQueue;
     private android.view.View layoutDrawer;
     private android.view.ViewGroup layoutMainContent;
@@ -71,6 +71,66 @@ public class PlayerActivity extends AppCompatActivity {
         }
     };
 
+    // Auto-hide bottom controls logic
+    private android.view.View layoutBottomControls;
+    private static final int CONTROLS_HIDE_DELAY_MS = 10000;
+    private final Runnable hideControlsRunnable = this::hideBottomControls;
+
+    // Remote capture long press / double click
+    private long lastLeftClickTime = 0;
+    private long lastRightClickTime = 0;
+    private static final long DOUBLE_CLICK_INTERVAL = 300;
+    private boolean isSeeking = false;
+    private final Runnable seekForwardRunnable = new Runnable() {
+        @Override public void run() {
+            if (player != null) {
+                player.seekForward();
+                updateTooltip(true);
+                handler.postDelayed(this, 300);
+            }
+        }
+    };
+    private final Runnable seekBackwardRunnable = new Runnable() {
+        @Override public void run() {
+            if (player != null) {
+                player.seekBack();
+                updateTooltip(false);
+                handler.postDelayed(this, 300);
+            }
+        }
+    };
+
+    private void updateTooltip(boolean isForward) {
+        if (player == null) return;
+        handler.removeCallbacks(showShortcutHintRunnable); // Cancel hint if seeking starts
+        handler.removeCallbacks(hideSeekHintRunnable);
+        long current = player.getCurrentPosition();
+        long duration = player.getDuration();
+        String prefix = isForward ? "▶▶ " : "◀◀ ";
+        tvSeekProgress.setText(prefix + formatTime(current) + " / " + formatTime(duration));
+        layoutSeekProgress.setVisibility(View.VISIBLE);
+    }
+
+    private final Runnable hideSeekHintRunnable = () -> {
+        layoutSeekProgress.setVisibility(View.GONE);
+    };
+
+    private final Runnable showShortcutHintRunnable = () -> {
+        if (!isSeeking) { // Only show if not currently seeking
+            tvSeekProgress.setText("长按「左」「右」键快进快退，双击「左」「右」键切换歌曲");
+            layoutSeekProgress.setVisibility(View.VISIBLE);
+            handler.postDelayed(hideSeekHintRunnable, 2000);
+        }
+    };
+
+    private void showShortcutHint() {
+        handler.removeCallbacks(showShortcutHintRunnable);
+        handler.removeCallbacks(hideSeekHintRunnable);
+        // Increase delay to 500ms to ensure long press (which starts around 300-500ms) 
+        // has enough time to cancel this hint.
+        handler.postDelayed(showShortcutHintRunnable, 500);
+    }
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -86,9 +146,11 @@ public class PlayerActivity extends AppCompatActivity {
         tvCurrentTime = findViewById(R.id.tvCurrentTime);
         tvDuration = findViewById(R.id.tvDuration);
         tvTooltip = findViewById(R.id.tvTooltip);
+        tvSeekProgress = findViewById(R.id.tvSeekProgress);
         tvPlaylistName = findViewById(R.id.tvPlaylistName);
         tvPlaylistCount = findViewById(R.id.tvPlaylistCount);
         layoutTooltip = findViewById(R.id.layoutTooltip);
+        layoutSeekProgress = findViewById(R.id.layoutSeekProgress);
 
         btnRepeat = findViewById(R.id.btnRepeat);
         btnPrev = findViewById(R.id.btnPrev);
@@ -98,6 +160,8 @@ public class PlayerActivity extends AppCompatActivity {
         btnQueue = findViewById(R.id.btnQueue);
         layoutDrawer = findViewById(R.id.layoutDrawer);
         layoutMainContent = findViewById(R.id.layoutMainContent);
+        layoutBottomControls = findViewById(R.id.layoutBottomControls);
+        
         rvDrawerSongs = findViewById(R.id.rvDrawerSongs);
         
         rvLyrics.setLayoutManager(new LinearLayoutManager(this));
@@ -132,6 +196,7 @@ public class PlayerActivity extends AppCompatActivity {
             layoutTooltip.setVisibility(hasFocus ? View.VISIBLE : View.INVISIBLE);
             if (hasFocus) {
                 updateProgress();
+                resetControlsTimer();
             }
         });
 
@@ -141,6 +206,8 @@ public class PlayerActivity extends AppCompatActivity {
 
         // Keep screen on while this activity is in foreground
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        
+        resetControlsTimer();
     }
 
     @Override
@@ -163,28 +230,30 @@ public class PlayerActivity extends AppCompatActivity {
             if (player == null) return;
             if (player.isPlaying()) player.pause();
             else player.play();
+            resetControlsTimer();
         });
 
         btnPrev.setOnClickListener(v -> {
-            if (player != null) {
-                // If the track just started, seekToPrevious naturally goes to the previous song.
-                // If it has played for a while, seekToPrevious normally just restarts the current song.
-                // We want to force it to ALWAYS skip to the previous song.
-                // So if we are past the threshold, we seek to 0 first, then call seekToPrevious.
-                if (player.getCurrentPosition() > player.getMaxSeekToPreviousPosition()) {
-                    player.seekTo(0);
-                }
-                player.seekToPrevious();
-            }
+            skipToPrevious();
+            resetControlsTimer();
         });
 
         btnNext.setOnClickListener(v -> {
-            if (player != null) player.seekToNext();
+            if (player != null) {
+                player.seekToNext();
+                resetControlsTimer();
+            }
         });
 
-        btnFav.setOnClickListener(v -> toggleFavorite());
+        btnFav.setOnClickListener(v -> {
+            toggleFavorite();
+            resetControlsTimer();
+        });
 
-        btnQueue.setOnClickListener(v -> toggleDrawer(true));
+        btnQueue.setOnClickListener(v -> {
+            toggleDrawer(true);
+            resetControlsTimer();
+        });
         
         layoutDrawer.setOnClickListener(v -> toggleDrawer(false));
 
@@ -212,6 +281,7 @@ public class PlayerActivity extends AppCompatActivity {
                 Toast.makeText(this, "已切换为随机播放", Toast.LENGTH_SHORT).show();
             }
             updateControlsUI();
+            resetControlsTimer();
         });
 
         loadFavorites();
@@ -275,10 +345,161 @@ public class PlayerActivity extends AppCompatActivity {
     public void onBackPressed() {
         if (layoutDrawer.getVisibility() == View.VISIBLE) {
             toggleDrawer(false);
+            resetControlsTimer();
+        } else if (isControlsVisible()) {
+            hideBottomControls();
         } else {
             super.onBackPressed();
         }
-    }     
+    }
+
+    private boolean isControlsVisible() {
+        return layoutBottomControls.getVisibility() == View.VISIBLE && layoutBottomControls.getAlpha() > 0;
+    }
+
+    private void showBottomControls() {
+        if (layoutBottomControls.getVisibility() == View.VISIBLE && layoutBottomControls.getAlpha() == 1f) return;
+        
+        layoutBottomControls.setVisibility(View.VISIBLE);
+        ObjectAnimator.ofFloat(layoutBottomControls, "alpha", layoutBottomControls.getAlpha(), 1f)
+                .setDuration(300)
+                .start();
+        
+        btnPlayPause.requestFocus();
+        resetControlsTimer();
+    }
+
+    private void hideBottomControls() {
+        if (layoutBottomControls.getVisibility() == View.GONE) return;
+
+        ObjectAnimator animator = ObjectAnimator.ofFloat(layoutBottomControls, "alpha", layoutBottomControls.getAlpha(), 0f);
+        animator.setDuration(300);
+        animator.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(android.animation.Animator animation) {
+                layoutBottomControls.setVisibility(View.GONE);
+                layoutTooltip.setVisibility(View.INVISIBLE);
+            }
+        });
+        animator.start();
+    }
+
+    private void resetControlsTimer() {
+        handler.removeCallbacks(hideControlsRunnable);
+        // If controls are visible or currently animating into visibility
+        if (layoutBottomControls != null && layoutBottomControls.getVisibility() == View.VISIBLE) {
+            handler.postDelayed(hideControlsRunnable, CONTROLS_HIDE_DELAY_MS);
+        }
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(android.view.KeyEvent event) {
+        int keyCode = event.getKeyCode();
+        int action = event.getAction();
+
+        if (layoutDrawer.getVisibility() == View.VISIBLE) {
+            return super.dispatchKeyEvent(event);
+        }
+
+        if (action == android.view.KeyEvent.ACTION_DOWN) {
+            resetControlsTimer();
+            if (!isControlsVisible()) {
+                if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
+                    showBottomControls();
+                    return true;
+                }
+                if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT) {
+                    if (event.getRepeatCount() == 0) {
+                        long now = System.currentTimeMillis();
+                        if (now - lastLeftClickTime < DOUBLE_CLICK_INTERVAL) {
+                            handler.removeCallbacks(showShortcutHintRunnable);
+                            handler.removeCallbacks(hideSeekHintRunnable);
+                            skipToPrevious();
+                            lastLeftClickTime = 0;
+                        } else {
+                            lastLeftClickTime = now;
+                            showShortcutHint();
+                        }
+                    } else {
+                        // Any repeat means the user is holding the key
+                        handler.removeCallbacks(showShortcutHintRunnable);
+                        handler.removeCallbacks(hideSeekHintRunnable);
+                        if (!isSeeking) {
+                            layoutSeekProgress.setVisibility(View.GONE);
+                        }
+                        if (event.getRepeatCount() > 2) {
+                            if (!isSeeking) {
+                                isSeeking = true;
+                                handler.post(seekBackwardRunnable);
+                            }
+                        }
+                    }
+                    return true;
+                }
+                if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) {
+                    if (event.getRepeatCount() == 0) {
+                        long now = System.currentTimeMillis();
+                        if (now - lastRightClickTime < DOUBLE_CLICK_INTERVAL) {
+                            handler.removeCallbacks(showShortcutHintRunnable);
+                            handler.removeCallbacks(hideSeekHintRunnable);
+                            if (player != null) player.seekToNext();
+                            lastRightClickTime = 0;
+                        } else {
+                            lastRightClickTime = now;
+                            showShortcutHint();
+                        }
+                    } else {
+                        // Any repeat means the user is holding the key
+                        handler.removeCallbacks(showShortcutHintRunnable);
+                        handler.removeCallbacks(hideSeekHintRunnable);
+                        if (!isSeeking) {
+                            layoutSeekProgress.setVisibility(View.GONE);
+                        }
+                        if (event.getRepeatCount() > 2) {
+                            if (!isSeeking) {
+                                isSeeking = true;
+                                handler.post(seekForwardRunnable);
+                            }
+                        }
+                    }
+                    return true;
+                }
+            } else {
+                // Controls visible
+                if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
+                    // If focus is already on bottom row, hide
+                    View focused = getCurrentFocus();
+                    if (focused == btnPlayPause || focused == btnPrev || focused == btnNext || focused == btnFav || focused == btnRepeat || focused == btnQueue) {
+                        hideBottomControls();
+                        return true;
+                    }
+                }
+            }
+        } else if (action == android.view.KeyEvent.ACTION_UP) {
+            if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT || keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) {
+                if (isSeeking) {
+                    handler.removeCallbacks(showShortcutHintRunnable);
+                    isSeeking = false;
+                    handler.removeCallbacks(seekForwardRunnable);
+                    handler.removeCallbacks(seekBackwardRunnable);
+                    layoutSeekProgress.setVisibility(View.GONE);
+                }
+            }
+        }
+
+        return super.dispatchKeyEvent(event);
+    }
+
+    private void skipToPrevious() {
+        if (player == null) return;
+        // If the track has played for a while, seekToPrevious normally just restarts the current song.
+        // We want to force it to ALWAYS skip to the previous song.
+        // So if we are past the threshold (typically 3s), we seek to 0 first, then call seekToPrevious.
+        if (player.getCurrentPosition() > player.getMaxSeekToPreviousPosition()) {
+            player.seekTo(0);
+        }
+        player.seekToPrevious();
+    }
     
     // This was originally inside setupControls(), moved out as per instruction's implied structure
     // to accommodate toggleDrawer and onBackPressed.
@@ -639,17 +860,22 @@ public class PlayerActivity extends AppCompatActivity {
     private void updateLyric(long currentPos) {
         if (lyricAdapter.getItemCount() == 0) return;
         
-        List<LyricAdapter.LyricLine> lines = lyricAdapter.getLyrics();
+        // 注意：因为 LyricAdapter 内部在 setLyrics 时在开头加了一个空行，
+        // 这里的原始数据索引需要对应调整。
+        List<LyricAdapter.LyricLine> rawLyrics = lyricAdapter.getLyrics();
+        if (rawLyrics.size() < 3) return; // 只有空行，没有实际歌词
+
         int activeIdx = -1;
-        for (int i = 0; i < lines.size(); i++) {
-            if (currentPos >= lines.get(i).timeMs) {
+        // 注意：i 从 1 开始，避开前置空行；i 到 size-1 结束，避开后置空行
+        for (int i = 1; i < rawLyrics.size() - 1; i++) {
+            if (currentPos >= rawLyrics.get(i).timeMs) {
                 activeIdx = i;
             } else {
                 break;
             }
         }
         
-        if (activeIdx != lyricAdapter.getCurrentIndex()) {
+        if (activeIdx != -1 && activeIdx != lyricAdapter.getCurrentIndex()) {
             lyricAdapter.setCurrentIndex(activeIdx);
             
             androidx.recyclerview.widget.LinearSmoothScroller smoothScroller = new androidx.recyclerview.widget.LinearSmoothScroller(this) {
@@ -662,13 +888,10 @@ public class PlayerActivity extends AppCompatActivity {
                     return 200f / displayMetrics.densityDpi; // Slower smooth scroll
                 }
             };
-            if (activeIdx == 0) {
-                rvLyrics.scrollToPosition(0);
-            } else {
-                smoothScroller.setTargetPosition(activeIdx);
-                if (rvLyrics.getLayoutManager() != null) {
-                    rvLyrics.getLayoutManager().startSmoothScroll(smoothScroller);
-                }
+            
+            smoothScroller.setTargetPosition(activeIdx);
+            if (rvLyrics.getLayoutManager() != null) {
+                rvLyrics.getLayoutManager().startSmoothScroll(smoothScroller);
             }
         }
     }
