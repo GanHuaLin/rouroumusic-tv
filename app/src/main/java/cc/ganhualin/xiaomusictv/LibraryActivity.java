@@ -79,6 +79,11 @@ public class LibraryActivity extends AppCompatActivity {
         "所有电台", "收藏", "全部", "其他", "最近新增"
     ));
 
+    private boolean isRefreshingAfterDelete = false;
+    private boolean isInitialLoad = true;
+    private boolean isFadingFocusDuringRefresh = false;
+    private int pendingDeleteFocusIndex = -1; // 刷新期间锁定焦点，防止飘走
+
     private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable progressUpdater = new Runnable() {
         @Override
@@ -120,6 +125,10 @@ public class LibraryActivity extends AppCompatActivity {
         tvPlaylistTitle = findViewById(R.id.tvPlaylistTitle);
         tvSongCount = findViewById(R.id.tvSongCount);
         btnSettings = findViewById(R.id.btnSettings);
+        
+        // 确保列表容器本身可聚焦，作为焦点丢失时的缓冲
+        rvPlaylists.setFocusable(true);
+        rvSongs.setFocusable(true);
         
         btnSettings.setOnClickListener(this::showSettingsMenu);
 
@@ -229,6 +238,10 @@ public class LibraryActivity extends AppCompatActivity {
         rvSongs.setLayoutManager(new LinearLayoutManager(this) {
             @Override
             public View onInterceptFocusSearch(View focused, int direction) {
+                // 如果正处于删除后的刷新期，强行拦截所有试图离开列表的焦点搜索
+                if (isFadingFocusDuringRefresh) {
+                    return focused;
+                }
                 if (direction == View.FOCUS_UP || direction == View.FOCUS_DOWN) {
                     RecyclerView.ViewHolder holder = rvSongs.findContainingViewHolder(focused);
 
@@ -406,7 +419,7 @@ public class LibraryActivity extends AppCompatActivity {
                 startActivity(new Intent(LibraryActivity.this, PlayerActivity.class));
             }
             @Override public void onFav(String song, int position) { toggleFavorite(song); }
-            @Override public void onDelete(String song, int position) { confirmDelete(song); }
+            @Override public void onDelete(String song, int position) { confirmDelete(song, position); }
         });
 
         fetchMusicList();
@@ -494,11 +507,11 @@ public class LibraryActivity extends AppCompatActivity {
         });
     }
 
-    private void confirmDelete(String song) {
+    private void confirmDelete(String song, int position) {
         new AlertDialog.Builder(this)
             .setTitle("删除歌曲")
             .setMessage("确定要删除 " + song + " 吗？")
-            .setPositiveButton("删除", (dialog, which) -> deleteSong(song))
+            .setPositiveButton("删除", (dialog, which) -> deleteSong(song, position))
             .setNegativeButton("取消", null)
             .show();
     }
@@ -512,7 +525,7 @@ public class LibraryActivity extends AppCompatActivity {
         return itemRoot;
     }
 
-    private void deleteSong(String song) {
+    private void deleteSong(String song, int position) {
         Map<String, String> body = new HashMap<>();
         body.put("name", song);
         
@@ -531,7 +544,76 @@ public class LibraryActivity extends AppCompatActivity {
             public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
                 if (response.isSuccessful()) {
                     Toast.makeText(LibraryActivity.this, "删除成功", Toast.LENGTH_SHORT).show();
+                    // 3. 处理焦点移动逻辑：下一行 -> 上一行 -> 歌单列表
+                    isFadingFocusDuringRefresh = true; // 先开启护盾
+                    if (btnSettings != null) btnSettings.setFocusable(false);
+                    if (tvPlaylistTitle != null) tvPlaylistTitle.setFocusable(false);
+                    if (rvPlaylists != null) {
+                        rvPlaylists.setFocusable(false);
+                        // 物理封锁：禁止所有子项获取焦点
+                        rvPlaylists.setDescendantFocusability(android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+                    }
+                    
+                    // 1. 立即从当前显示的列表中移除，提供即时反馈 (数据变化会引起焦点变动，所以必须在护盾后执行)
+                    if (currentPlaylistSongs != null && currentPlaylistSongs.contains(song)) {
+                        currentPlaylistSongs.remove(song);
+                        songAdapter.setSongs(currentPlaylistSongs);
+                        tvSongCount.setText(currentPlaylistSongs.size() + " 首歌曲");
+                    }
+                    
+                    // 2. 从全局数据缓存中也移除该歌曲，确保其他地方数据一致
+                    if (musicData != null) {
+                        for (Map.Entry<String, List<String>> entry : musicData.entrySet()) {
+                            if (entry.getValue() != null) {
+                                entry.getValue().remove(song);
+                            }
+                        }
+                    }
+                    
+                    if (currentPlaylistSongs != null) {
+                        int currentCount = currentPlaylistSongs.size();
+                        if (currentCount > 0) {
+                            final int targetPos = (position < currentCount) ? position : currentCount - 1;
+                            pendingDeleteFocusIndex = targetPos; 
+                            
+                            // 核心修复：如果删除的是当前正在播放的歌，需要同步播放器的队列
+                            if (player != null && player.getCurrentMediaItem() != null) {
+                                String currentPlayingTitle = player.getCurrentMediaItem().mediaMetadata.title != null ? 
+                                    player.getCurrentMediaItem().mediaMetadata.title.toString() : "";
+                                if (song.equals(currentPlayingTitle)) {
+                                    // 重新加载当前列表到播放器，并跳转到目标位置
+                                    playSongAtIndex(targetPos);
+                                }
+                            }
+                            
+                            rvSongs.scrollToPosition(targetPos);
+                            rvSongs.post(() -> {
+                                if (rvSongs.getLayoutManager() != null) {
+                                    View view = rvSongs.getLayoutManager().findViewByPosition(targetPos);
+                                    if (view != null) {
+                                        View deleteBtn = view.findViewById(R.id.btnItemDelete);
+                                        if (deleteBtn != null && deleteBtn.isFocusable()) {
+                                            deleteBtn.requestFocus();
+                                        } else {
+                                            view.requestFocus();
+                                        }
+                                    }
+                                }
+                            });
+                        } else {
+                            pendingDeleteFocusIndex = -1;
+                            if (rvPlaylists != null) {
+                                rvPlaylists.setFocusable(true);
+                                rvPlaylists.setDescendantFocusability(android.view.ViewGroup.FOCUS_BEFORE_DESCENDANTS);
+                            }
+                            rvPlaylists.requestFocus();
+                        }
+                    }
+
+                    // 4. 全局刷新
+                    isRefreshingAfterDelete = true;
                     fetchMusicList();
+                    updatePlayingStatus(); // 立即更新 UI 状态显示
                 } else {
                      Toast.makeText(LibraryActivity.this, "删除失败: " + response.code(), Toast.LENGTH_SHORT).show();
                 }
@@ -812,7 +894,13 @@ public class LibraryActivity extends AppCompatActivity {
                             targetPlaylist = filteredData.keySet().iterator().next();
                         }
                         
-                        if (!targetPlaylist.equals(currentPlaylistName) || currentPlaylistSongs.isEmpty()) {
+                        // 如果当前查看的歌单仍然存在，更新它的内容 (解决删除歌曲后列表不更新的问题)
+                        if (filteredData.containsKey(currentPlaylistName)) {
+                            currentPlaylistSongs = filteredData.get(currentPlaylistName);
+                            songAdapter.setSongs(currentPlaylistSongs);
+                            tvSongCount.setText(currentPlaylistSongs.size() + " 首歌曲");
+                            tvPlaylistTitle.setText(currentPlaylistName);
+                        } else if (!targetPlaylist.equals(currentPlaylistName) || currentPlaylistSongs.isEmpty()) {
                             currentPlaylistName = targetPlaylist;
                             currentPlaylistSongs = filteredData.get(targetPlaylist);
                             songAdapter.setSongs(currentPlaylistSongs);
@@ -832,15 +920,72 @@ public class LibraryActivity extends AppCompatActivity {
                         
                         tryRestoreLastSong();
                         
-                        // Always request focus on "All Songs" (Index 0)
-                         rvPlaylists.post(() -> {
-                            if (rvPlaylists.getLayoutManager() != null) {
-                                View view = rvPlaylists.getLayoutManager().findViewByPosition(0);
+                        // 初始焦点逻辑
+                        final String finalTargetPlaylist = targetPlaylist;
+                        rvPlaylists.postDelayed(() -> {
+                            // 只有在首次启动加载数据后才执行初始聚焦
+                            if (isInitialLoad && !isRefreshingAfterDelete) {
+                                isInitialLoad = false;
+                                int playlistIndex = 0;
+                                List<String> names = new ArrayList<>(filteredData.keySet());
+                                for (int i = 0; i < names.size(); i++) {
+                                    if (names.get(i).equals(finalTargetPlaylist)) {
+                                        playlistIndex = i;
+                                        break;
+                                    }
+                                }
+                                playlistAdapter.setSelection(playlistIndex);
+                                View view = rvPlaylists.getLayoutManager().findViewByPosition(playlistIndex);
                                 if (view != null) {
                                     view.requestFocus();
+                                } else {
+                                    rvPlaylists.scrollToPosition(playlistIndex);
+                                    final int idx = playlistIndex;
+                                    rvPlaylists.postDelayed(() -> {
+                                        View v = rvPlaylists.getLayoutManager().findViewByPosition(idx);
+                                        if (v != null) v.requestFocus();
+                                    }, 150);
+                                }
+                                return;
+                            }
+                            // 删除后的刷新：执行终极焦点抢回，防止丢失到设置按钮
+                            if (isRefreshingAfterDelete) {
+                                if (pendingDeleteFocusIndex >= 0 && rvSongs.getLayoutManager() != null) {
+                                    rvSongs.scrollToPosition(pendingDeleteFocusIndex);
+                                    rvSongs.postDelayed(() -> {
+                                        View v = rvSongs.getLayoutManager().findViewByPosition(pendingDeleteFocusIndex);
+                                        if (v != null) {
+                                            View db = v.findViewById(R.id.btnItemDelete);
+                                            if (db != null) db.requestFocus();
+                                            else v.requestFocus();
+                                        } else {
+                                            rvSongs.requestFocus();
+                                        }
+                                        
+                                        // 最后全力恢复所有组件的焦点搜索能力
+                                        if (btnSettings != null) btnSettings.setFocusable(true);
+                                        if (tvPlaylistTitle != null) tvPlaylistTitle.setFocusable(true);
+                                        if (rvPlaylists != null) {
+                                            rvPlaylists.setFocusable(true);
+                                            rvPlaylists.setDescendantFocusability(android.view.ViewGroup.FOCUS_BEFORE_DESCENDANTS);
+                                        }
+                                        
+                                        isFadingFocusDuringRefresh = false; 
+                                        isRefreshingAfterDelete = false;
+                                        pendingDeleteFocusIndex = -1;
+                                    }, 100);
+                                } else {
+                                    if (btnSettings != null) btnSettings.setFocusable(true);
+                                    if (tvPlaylistTitle != null) tvPlaylistTitle.setFocusable(true);
+                                    if (rvPlaylists != null) {
+                                        rvPlaylists.setFocusable(true);
+                                        rvPlaylists.setDescendantFocusability(android.view.ViewGroup.FOCUS_BEFORE_DESCENDANTS);
+                                    }
+                                    isFadingFocusDuringRefresh = false;
+                                    isRefreshingAfterDelete = false;
                                 }
                             }
-                        });
+                        }, 200); // 缩短整体延迟，提高响应速度
                     }
                 }
             }

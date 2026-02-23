@@ -28,6 +28,13 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
         notifyDataSetChanged();
     }
     
+    public void setSelection(int position) {
+        int oldPos = selectedPosition;
+        selectedPosition = position;
+        notifyItemChanged(oldPos);
+        notifyItemChanged(selectedPosition);
+    }
+
     public void notifyPlaylistUpdated(String playlistName, List<String> newSongs) {
         if (data != null) {
             data.put(playlistName, newSongs);
