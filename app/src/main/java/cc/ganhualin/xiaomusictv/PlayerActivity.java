@@ -451,6 +451,7 @@ public class PlayerActivity extends AppCompatActivity {
                         if (now - lastLeftClickTime < DOUBLE_CLICK_INTERVAL) {
                             handler.removeCallbacks(showShortcutHintRunnable);
                             handler.removeCallbacks(hideSeekHintRunnable);
+                            layoutSeekProgress.setVisibility(View.GONE);
                             skipToPrevious();
                             lastLeftClickTime = 0;
                         } else {
@@ -479,6 +480,7 @@ public class PlayerActivity extends AppCompatActivity {
                         if (now - lastRightClickTime < DOUBLE_CLICK_INTERVAL) {
                             handler.removeCallbacks(showShortcutHintRunnable);
                             handler.removeCallbacks(hideSeekHintRunnable);
+                            layoutSeekProgress.setVisibility(View.GONE);
                             if (player != null) player.seekToNext();
                             lastRightClickTime = 0;
                         } else {
