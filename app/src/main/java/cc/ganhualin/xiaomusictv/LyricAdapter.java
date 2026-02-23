@@ -14,10 +14,16 @@ public class LyricAdapter extends RecyclerView.Adapter<LyricAdapter.LyricViewHol
     public static class LyricLine {
         public long timeMs;
         public String text;
+        public String rawLine; // 保存原始行内容用于写回
 
         public LyricLine(long timeMs, String text) {
+            this(timeMs, text, "");
+        }
+
+        public LyricLine(long timeMs, String text, String rawLine) {
             this.timeMs = timeMs;
             this.text = text;
+            this.rawLine = rawLine;
         }
     }
 

@@ -32,4 +32,8 @@ public interface ApiService {
     // POST /playlistdelmusic {"name": "playlistName", "music_list": ["songName"]}
     @POST("playlistdelmusic")
     Call<ResponseBody> removeFromPlaylist(@Body Map<String, Object> body);
+
+    // POST /setmusictag {"musicname": "songName", "title": "...", "artist": "...", "album": "...", "year": "...", "genre": "...", "lyrics": "...", "picture": "..."}
+    @POST("setmusictag")
+    Call<ResponseBody> setMusicTag(@Body Map<String, Object> body);
 }

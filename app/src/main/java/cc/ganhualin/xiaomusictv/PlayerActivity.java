@@ -54,6 +54,11 @@ public class PlayerActivity extends AppCompatActivity {
     private android.view.ViewGroup layoutMainContent;
     private RecyclerView rvDrawerSongs;
     private DrawerSongAdapter drawerSongAdapter;
+    private android.view.View layoutOptionMenu;
+    private RecyclerView rvOptions;
+    private PlayerOptionAdapter optionAdapter;
+    private String scrapedPicUrl = ""; // 用于保存刮削到的封面地址
+    private String scrapedArtist = ""; // 用于保存刮削到的歌手名
     private boolean isFavorited = false;
     private java.util.Set<String> favoritesSet = new java.util.HashSet<>();
 
@@ -170,6 +175,8 @@ public class PlayerActivity extends AppCompatActivity {
         layoutDrawer = findViewById(R.id.layoutDrawer);
         layoutMainContent = findViewById(R.id.layoutMainContent);
         layoutBottomControls = findViewById(R.id.layoutBottomControls);
+        layoutOptionMenu = findViewById(R.id.layoutOptionMenu);
+        rvOptions = findViewById(R.id.rvOptions);
         
         rvDrawerSongs = findViewById(R.id.rvDrawerSongs);
         
@@ -177,6 +184,20 @@ public class PlayerActivity extends AppCompatActivity {
         rvLyrics.setItemAnimator(null); // Disable animations to prevent marquee reset
         lyricAdapter = new LyricAdapter();
         rvLyrics.setAdapter(lyricAdapter);
+
+        // Option Menu Setup
+        rvOptions.setLayoutManager(new LinearLayoutManager(this));
+        List<String> options = new ArrayList<>();
+        options.add("修改歌手名");
+        options.add("重新刮削歌词");
+        options.add("保存当前歌词");
+        
+        optionAdapter = new PlayerOptionAdapter(options, (option, position) -> {
+            handleOptionClick(option);
+        });
+        optionAdapter.setOptionDisabled("保存当前歌词", true);
+        rvOptions.setAdapter(optionAdapter);
+        layoutOptionMenu.findViewById(R.id.viewOptionMenuDim).setOnClickListener(v -> toggleOptionMenu(false));
 
         // Sidebar Drawer Setup
         rvDrawerSongs.setLayoutManager(new LinearLayoutManager(this));
@@ -353,7 +374,9 @@ public class PlayerActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
-        if (layoutDrawer.getVisibility() == View.VISIBLE) {
+        if (layoutOptionMenu.getVisibility() == View.VISIBLE) {
+            toggleOptionMenu(false);
+        } else if (layoutDrawer.getVisibility() == View.VISIBLE) {
             toggleDrawer(false);
             resetControlsTimer();
         } else if (isControlsVisible()) {
@@ -407,11 +430,15 @@ public class PlayerActivity extends AppCompatActivity {
         int keyCode = event.getKeyCode();
         int action = event.getAction();
 
-        if (layoutDrawer.getVisibility() == View.VISIBLE) {
+        if (layoutDrawer.getVisibility() == View.VISIBLE || layoutOptionMenu.getVisibility() == View.VISIBLE) {
             return super.dispatchKeyEvent(event);
         }
 
         if (action == android.view.KeyEvent.ACTION_DOWN) {
+            if (keyCode == android.view.KeyEvent.KEYCODE_MENU) {
+                toggleOptionMenu(true);
+                return true;
+            }
             resetControlsTimer();
             if (!isControlsVisible()) {
                 if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
@@ -778,7 +805,12 @@ public class PlayerActivity extends AppCompatActivity {
             if (current.mediaId.equals(currentScrapingId)) return; // 已经在刮削了
             currentScrapingId = current.mediaId;
         }
-
+        
+        // 每次重新开始刮削前，禁用保存功能
+        if (optionAdapter != null) optionAdapter.setOptionDisabled("保存当前歌词", true);
+        scrapedPicUrl = "";
+        scrapedArtist = "";
+        
         Log.d(TAG, "Triggering initial scraper check for: " + songName);
         showNoLyrics("正在获取歌词...");
         
@@ -854,7 +886,7 @@ public class PlayerActivity extends AppCompatActivity {
             artistHint = "";
         }
 
-        Log.d(TAG, "Starting external scrape flow for: " + songName + " with hint: " + artistHint);
+        Log.d(TAG, "开始第三方刮削流程 | 歌曲名: " + songName + " | 歌手提示: " + artistHint);
         
         // 增加 15 秒超时保护
         handler.removeCallbacks(scrapeTimeoutRunnable);
@@ -866,7 +898,7 @@ public class PlayerActivity extends AppCompatActivity {
             public void onSuccess(String artist, String picUrl, String lyrics) {
                 runOnUiThread(() -> {
                     handler.removeCallbacks(scrapeTimeoutRunnable);
-                    Log.d(TAG, "External scrape onSuccess UI update. picUrl=" + picUrl);
+                    Log.d(TAG, "第三方刮削成功，正在更新 UI。图片地址: " + picUrl);
                     // 更新歌手
                     if (artist != null && !artist.isEmpty()) {
                         tvBigArtist.setText(artist);
@@ -883,12 +915,12 @@ public class PlayerActivity extends AppCompatActivity {
                             .listener(new com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable>() {
                                 @Override
                                 public boolean onLoadFailed(@Nullable com.bumptech.glide.load.engine.GlideException e, Object model, com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target, boolean isFirstResource) {
-                                    Log.e(TAG, "Glide Load Failed for picUrl: " + picUrl, e);
+                                    Log.e(TAG, "Glide 加载封面失败: " + picUrl, e);
                                     return false;
                                 }
                                 @Override
                                 public boolean onResourceReady(android.graphics.drawable.Drawable resource, Object model, com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target, com.bumptech.glide.load.DataSource dataSource, boolean isFirstResource) {
-                                    Log.d(TAG, "Glide Load Success for picUrl: " + picUrl);
+                                    Log.d(TAG, "Glide 加载封面成功: " + picUrl);
                                     return false;
                                 }
                             })
@@ -907,6 +939,10 @@ public class PlayerActivity extends AppCompatActivity {
                     // 更新歌词
                     if (lyrics != null && !lyrics.isEmpty()) {
                         parseLyrics(lyrics);
+                        // 刮削到歌词或封面，启用保存功能
+                        scrapedPicUrl = picUrl;
+                        scrapedArtist = artist;
+                        if (optionAdapter != null) optionAdapter.setOptionDisabled("保存当前歌词", false);
                     } else {
                         showNoLyrics("暂无当前歌曲歌词");
                     }
@@ -917,7 +953,7 @@ public class PlayerActivity extends AppCompatActivity {
             public void onError(String msg) {
                 runOnUiThread(() -> {
                     handler.removeCallbacks(scrapeTimeoutRunnable);
-                    Log.e(TAG, "External scrape onError: " + msg);
+                    Log.e(TAG, "第三方刮削出错: " + msg);
                     showNoLyrics("暂无歌词");
                 });
             }
@@ -952,7 +988,7 @@ public class PlayerActivity extends AppCompatActivity {
                              double sec = Double.parseDouble(parts[1].trim());
                              long timeMs = (long) ((min * 60 + sec) * 1000);
                              if (!textPart.isEmpty()) { 
-                                 lines.add(new LyricAdapter.LyricLine(timeMs, textPart));
+                                 lines.add(new LyricAdapter.LyricLine(timeMs, textPart, line));
                              }
                          }
                      } catch (Exception e) {
@@ -1079,6 +1115,215 @@ public class PlayerActivity extends AppCompatActivity {
     private String formatTime(long ms) {
         long sec = ms / 1000;
         return String.format("%d:%02d", sec / 60, sec % 60);
+    }
+
+    private void toggleOptionMenu(boolean show) {
+        if (show) {
+            layoutOptionMenu.setVisibility(View.VISIBLE);
+            if (layoutMainContent != null) {
+                layoutMainContent.setDescendantFocusability(android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+            }
+            rvOptions.postDelayed(() -> {
+                if (rvOptions.getChildCount() > 0) {
+                    View firstItem = rvOptions.getChildAt(0);
+                    if (firstItem != null) firstItem.requestFocus();
+                } else {
+                    rvOptions.requestFocus();
+                }
+            }, 100);
+        } else {
+            layoutOptionMenu.setVisibility(View.GONE);
+            if (layoutMainContent != null) {
+                layoutMainContent.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
+            }
+        }
+    }
+
+    private void handleOptionClick(String option) {
+        toggleOptionMenu(false);
+        MediaItem current = player != null ? player.getCurrentMediaItem() : null;
+        if (current == null) return;
+        
+        final String mediaId = current.mediaId; // 原始文件名
+        String songTitle = current.mediaMetadata.title != null ? current.mediaMetadata.title.toString() : mediaId;
+
+        switch (option) {
+            case "修改歌手名":
+                String currentArtist = tvBigArtist.getText().toString();
+                if (currentArtist.equals("加载中...") || currentArtist.equals("未知艺术家")) currentArtist = "";
+                showEditDialog("修改歌手名", currentArtist, newArtist -> updateSongTag(mediaId, "artist", newArtist));
+                break;
+            case "重新刮削歌词":
+                currentScrapingId = ""; 
+                fetchMusicInfoForScraping(songTitle);
+                break;
+            case "保存当前歌词":
+                // 拼合歌词
+                StringBuilder sb = new StringBuilder();
+                List<LyricAdapter.LyricLine> lyricLines = lyricAdapter.getLyrics();
+                for (LyricAdapter.LyricLine l : lyricLines) {
+                    if (l.rawLine != null && !l.rawLine.isEmpty()) {
+                        sb.append(l.rawLine).append("\n");
+                    }
+                }
+                String fullLyrics = sb.toString().trim();
+                
+                java.util.Map<String, String> updates = new java.util.HashMap<>();
+                if (!fullLyrics.isEmpty()) updates.put("lyrics", fullLyrics);
+                if (scrapedPicUrl != null && !scrapedPicUrl.isEmpty()) updates.put("picture", scrapedPicUrl);
+                
+                // 如果刮削到了歌手，也可以作为备选存入（在 updateSongTagsBundle 内部判断是否覆盖）
+                if (scrapedArtist != null && !scrapedArtist.isEmpty()) {
+                    updates.put("scraped_artist", scrapedArtist);
+                }
+                
+                if (!updates.isEmpty()) {
+                    updateSongTagsBundle(mediaId, updates);
+                } else {
+                    Toast.makeText(this, "无可保存的内容", Toast.LENGTH_SHORT).show();
+                }
+                break;
+        }
+    }
+
+    private interface OnSubmitListener {
+        void onSubmit(String value);
+    }
+
+    private void showEditDialog(String title, String defaultValue, OnSubmitListener listener) {
+        android.widget.EditText editText = new android.widget.EditText(this);
+        editText.setText(defaultValue);
+        if (defaultValue != null) editText.setSelection(defaultValue.length());
+
+        new androidx.appcompat.app.AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
+            .setTitle(title)
+            .setView(editText)
+            .setPositiveButton("保存", (dialog, which) -> {
+                String value = editText.getText().toString().trim();
+                if (!value.isEmpty()) {
+                    listener.onSubmit(value);
+                }
+            })
+            .setNegativeButton("取消", null)
+            .show();
+    }
+
+    private void updateSongTag(String fileName, String key, String value) {
+        // 第一步：先获取当前完整的 Tags
+        apiService.getMusicInfo(fileName, true).enqueue(new Callback<JsonObject>() {
+            @Override
+            public void onResponse(Call<JsonObject> call, Response<JsonObject> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    JsonObject json = response.body();
+                    JsonObject tags = json.has("tags") ? json.getAsJsonObject("tags") : new JsonObject();
+                    
+                    // 第二步：构建完整的请求体
+                    java.util.Map<String, Object> body = new java.util.HashMap<>();
+                    body.put("musicname", fileName); // 接口要求的必填项
+                    
+                    // 预填原有数据
+                    body.put("title", getStringOrEmpty(tags, "title"));
+                    body.put("artist", getStringOrEmpty(tags, "artist"));
+                    body.put("album", getStringOrEmpty(tags, "album"));
+                    body.put("year", getStringOrEmpty(tags, "year"));
+                    body.put("genre", getStringOrEmpty(tags, "genre"));
+                    body.put("lyrics", getStringOrEmpty(tags, "lyrics"));
+                    body.put("picture", getStringOrEmpty(tags, "picture"));
+                    
+                    // 覆写需要修改的那个字段
+                    body.put(key, value);
+                    
+                    // 第三步：提交更新
+                    apiService.setMusicTag(body).enqueue(new Callback<ResponseBody>() {
+                        @Override
+                        public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                            runOnUiThread(() -> {
+                                if (response.isSuccessful()) {
+                                    Toast.makeText(PlayerActivity.this, "更新成功", Toast.LENGTH_SHORT).show();
+                                    if (key.equals("title")) tvBigTitle.setText(value);
+                                    if (key.equals("artist")) tvBigArtist.setText(value);
+                                } else {
+                                    Toast.makeText(PlayerActivity.this, "更新失败: " + response.code(), Toast.LENGTH_SHORT).show();
+                                }
+                            });
+                        }
+                        @Override
+                        public void onFailure(Call<ResponseBody> call, Throwable t) {
+                            runOnUiThread(() -> Toast.makeText(PlayerActivity.this, "网络错误: " + t.getMessage(), Toast.LENGTH_SHORT).show());
+                        }
+                    });
+                }
+            }
+
+            @Override
+            public void onFailure(Call<JsonObject> call, Throwable t) {
+                runOnUiThread(() -> Toast.makeText(PlayerActivity.this, "同步标签失败", Toast.LENGTH_SHORT).show());
+            }
+        });
+    }
+
+    private void updateSongTagsBundle(String fileName, java.util.Map<String, String> updates) {
+        apiService.getMusicInfo(fileName, true).enqueue(new Callback<JsonObject>() {
+            @Override
+            public void onResponse(Call<JsonObject> call, Response<JsonObject> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    JsonObject json = response.body();
+                    JsonObject tags = json.has("tags") ? json.getAsJsonObject("tags") : new JsonObject();
+                    
+                    java.util.Map<String, Object> body = new java.util.HashMap<>();
+                    body.put("musicname", fileName);
+                    
+                    body.put("title", getStringOrEmpty(tags, "title"));
+                    body.put("artist", getStringOrEmpty(tags, "artist"));
+                    body.put("album", getStringOrEmpty(tags, "album"));
+                    body.put("year", getStringOrEmpty(tags, "year"));
+                    body.put("genre", getStringOrEmpty(tags, "genre"));
+                    body.put("lyrics", getStringOrEmpty(tags, "lyrics"));
+                    body.put("picture", getStringOrEmpty(tags, "picture"));
+                    
+                    // 应用所有更新
+                    for (java.util.Map.Entry<String, String> entry : updates.entrySet()) {
+                        if (entry.getKey().equals("scraped_artist")) {
+                            // 只有当原始 artist 为空或未知时，才覆盖
+                            String oldArtist = getStringOrEmpty(tags, "artist");
+                            if (oldArtist.isEmpty() || oldArtist.equals("未知艺术家")) {
+                                body.put("artist", entry.getValue());
+                            }
+                        } else {
+                            body.put(entry.getKey(), entry.getValue());
+                        }
+                    }
+                    
+                    apiService.setMusicTag(body).enqueue(new Callback<ResponseBody>() {
+                        @Override
+                        public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                            runOnUiThread(() -> {
+                                if (response.isSuccessful()) {
+                                    Toast.makeText(PlayerActivity.this, "已保存歌词", Toast.LENGTH_SHORT).show();
+                                    // 保存成功后再次禁用，防止重复提交
+                                    optionAdapter.setOptionDisabled("保存当前歌词", true);
+                                } else {
+                                    Toast.makeText(PlayerActivity.this, "更新失败: " + response.code(), Toast.LENGTH_SHORT).show();
+                                }
+                            });
+                        }
+                        @Override
+                        public void onFailure(Call<ResponseBody> call, Throwable t) {
+                            runOnUiThread(() -> Toast.makeText(PlayerActivity.this, "网络错误: " + t.getMessage(), Toast.LENGTH_SHORT).show());
+                        }
+                    });
+                }
+            }
+            @Override
+            public void onFailure(Call<JsonObject> call, Throwable t) {
+                runOnUiThread(() -> Toast.makeText(PlayerActivity.this, "同步标签失败", Toast.LENGTH_SHORT).show());
+            }
+        });
+    }
+
+    private String getStringOrEmpty(JsonObject obj, String key) {
+        if (obj == null || !obj.has(key) || obj.get(key).isJsonNull()) return "";
+        return obj.get(key).getAsString();
     }
 
     @Override

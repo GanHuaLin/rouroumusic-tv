@@ -50,11 +50,11 @@ public class SongScraper {
         }
 
         if (!activeScrapes.add(finalQuery)) {
-            Log.d(TAG, "Scrape already in progress for: " + finalQuery + ". Skipping duplicate request.");
+            Log.d(TAG, "歌曲正在刮削中: " + finalQuery + "，跳过重复请求。");
             return;
         }
         
-        Log.d(TAG, "Scraping start. Query: " + finalQuery);
+        Log.d(TAG, "开始刮削。检索词: " + finalQuery);
 
         final String finalPotentialArtist = potentialArtist;
         final String finalPotentialTitle = potentialTitle;
@@ -65,6 +65,7 @@ public class SongScraper {
                 try {
                 if (response.isSuccessful() && response.body() != null) {
                     try {
+                        Log.d(TAG, "搜索接口返回原始 JSON: " + response.body().toString());
                         JsonObject result = response.body().getAsJsonObject("result");
                         if (result != null && result.has("songs")) {
                             JsonArray songs = result.getAsJsonArray("songs");
@@ -81,7 +82,7 @@ public class SongScraper {
                                         // 完美匹配优先
                                         if (rArtist.equalsIgnoreCase(finalPotentialArtist) && rTitle.equalsIgnoreCase(finalPotentialTitle)) {
                                             bestMatch = song;
-                                            Log.d(TAG, "Perfect Match found at index " + i);
+                                            Log.d(TAG, "在索引 " + i + " 处找到完美匹配");
                                             break;
                                         }
                                         // 歌手匹配次之
@@ -106,7 +107,7 @@ public class SongScraper {
                                     @Override
                                     public void onComplete(String picUrl, String lyrics) {
                                         activeScrapes.remove(finalQuery);
-                                        Log.d(TAG, "Scrape Success: " + finalArtist + ", img=" + picUrl + ", lrcLen=" + (lyrics != null ? lyrics.length() : 0));
+                                        Log.d(TAG, "刮削成功: " + finalArtist + ", 封面=" + picUrl + ", 歌词长度=" + (lyrics != null ? lyrics.length() : 0));
                                         callback.onSuccess(finalArtist, picUrl, lyrics);
                                     }
                                 });
@@ -114,25 +115,25 @@ public class SongScraper {
                             }
                         }
                         activeScrapes.remove(finalQuery);
-                        callback.onError("No results found on NetEase");
+                        callback.onError("未找到检索结果");
                     } catch (Exception e) {
                         activeScrapes.remove(finalQuery);
-                        callback.onError("Parse error: " + e.getMessage());
+                        callback.onError("解析失败: " + e.getMessage());
                     }
                 } else {
                     activeScrapes.remove(finalQuery);
-                    callback.onError("Search failed: " + response.code());
+                    callback.onError("搜索失败: " + response.code());
                 }
                 } catch (Exception e) {
                     activeScrapes.remove(finalQuery);
-                    callback.onError("Unexpected error: " + e.getMessage());
+                    callback.onError("未知错误: " + e.getMessage());
                 }
             }
 
             @Override
             public void onFailure(Call<JsonObject> call, Throwable t) {
                 activeScrapes.remove(finalQuery);
-                callback.onError("Network error: " + t.getMessage());
+                callback.onError("网络错误: " + t.getMessage());
             }
         });
     }
@@ -178,7 +179,7 @@ public class SongScraper {
                             }
                         }
                     } catch (Exception e) {
-                        Log.e(TAG, "Detail parse error: " + e.getMessage());
+                        Log.e(TAG, "解析搜索结果异常: " + e.getMessage());
                     }
                 }
                 
@@ -201,7 +202,7 @@ public class SongScraper {
                                     }
                                 }
                             } catch (Exception e) {
-                                Log.e(TAG, "Lyric parse error: " + e.getMessage());
+                                Log.e(TAG, "歌词解析错误: " + e.getMessage());
                             }
                         }
                         callback.onComplete(finalPic, lyrics);
@@ -230,7 +231,7 @@ public class SongScraper {
                                     }
                                 }
                             } catch (Exception e) {
-                                Log.e(TAG, "Lyric parse error (on fallback): " + e.getMessage());
+                                Log.e(TAG, "歌词解析错误（降级方案）: " + e.getMessage());
                             }
                         }
                         callback.onComplete("", lyrics);
