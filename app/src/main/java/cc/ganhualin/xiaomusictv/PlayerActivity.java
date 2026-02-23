@@ -35,6 +35,7 @@ import retrofit2.Callback;
 import retrofit2.Response;
 import okhttp3.ResponseBody;
 import android.content.SharedPreferences;
+import com.google.gson.JsonObject;
 
 public class PlayerActivity extends AppCompatActivity {
     private static final String TAG = "PlayerActivity";
@@ -61,6 +62,14 @@ public class PlayerActivity extends AppCompatActivity {
     private LyricAdapter lyricAdapter;
     private ApiService apiService;
     private String baseUrl;
+    private SongScraper songScraper;
+    private String currentScrapingId = ""; // 防止重复刮削同一个 ID
+    private final Runnable scrapeTimeoutRunnable = () -> {
+        Log.e(TAG, "Scrape Timeout!");
+        if (lyricAdapter.getItemCount() <= 0) {
+            showNoLyrics("暂无歌词 (请求超时)");
+        }
+    };
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable progressUpdater = new Runnable() {
@@ -207,6 +216,7 @@ public class PlayerActivity extends AppCompatActivity {
         // Keep screen on while this activity is in foreground
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         
+        songScraper = new SongScraper();
         resetControlsTimer();
     }
 
@@ -714,34 +724,204 @@ public class PlayerActivity extends AppCompatActivity {
             tvBigArtist.setText("加载中...");
         }
 
-        // Handle Lyrics from Metadata
-        if (lyrics != null) {
+        // 1. 处理歌词状态
+        boolean isCurrentlyScraping = mediaItem.mediaId.equals(currentScrapingId);
+        if (lyrics != null && !lyrics.isEmpty()) {
             String lyricArtist = extractArtistFromLyrics(lyrics);
             if (lyricArtist != null && !lyricArtist.isEmpty()) {
                 tvBigArtist.setText(lyricArtist);
             }
             parseLyrics(lyrics);
-        } else {
-            // Keep previous visibility if waiting for fetch, but if it's been a while...
-            // Actually MusicService will push an update soon.
+        } else if (!isCurrentlyScraping) {
+            // 只有当不在抓取中时，才显示初始的“加载”状态
             showNoLyrics("加载歌词...");
         }
-        
-        // Handle Artwork from Metadata
+
+        // 2. 处理封面状态
+        boolean hasArtwork = false;
         if (mediaItem.mediaMetadata.artworkUri != null) {
             String uri = mediaItem.mediaMetadata.artworkUri.toString();
-            // Load Cover
+            Log.d(TAG, "Loading artwork from metadata: " + uri);
             Glide.with(this).load(uri)
                 .placeholder(R.drawable.ic_cover_placeholder)
                 .error(R.drawable.ic_cover_placeholder)
                 .transform(new RoundedCorners(80)).into(ivBigCover);
-            // Load Blur Background
             Glide.with(this).load(uri)
                 .transform(new jp.wasabeef.glide.transformations.BlurTransformation(20, 3))
                 .into(ivBlurBackground);
+            hasArtwork = true;
         } else {
-            ivBigCover.setImageResource(R.drawable.ic_cover_placeholder);
+            // 如果当前在抓取中，不要轻易重置图片，避免闪烁
+            if (!isCurrentlyScraping) {
+                ivBigCover.setImageResource(R.drawable.ic_cover_placeholder);
+                ivBlurBackground.setImageResource(android.R.color.black);
+            }
         }
+
+        // 3. 触发抓取补全逻辑：只要缺封面 或 缺歌词，就去尝试抓取
+        if (!hasArtwork || lyrics == null || lyrics.isEmpty()) {
+            // 只有当歌曲 ID 变化时（或者之前没记录到 ID）才重新触发
+            if (!isCurrentlyScraping) {
+                fetchMusicInfoForScraping(queryName);
+            }
+        } else {
+            // 如果都全了，重置状态
+            currentScrapingId = "";
+        }
+    }
+
+    private void fetchMusicInfoForScraping(String songName) {
+        if (songName == null || songName.isEmpty()) return;
+        
+        MediaItem current = player != null ? player.getCurrentMediaItem() : null;
+        if (current != null) {
+            if (current.mediaId.equals(currentScrapingId)) return; // 已经在刮削了
+            currentScrapingId = current.mediaId;
+        }
+
+        Log.d(TAG, "Triggering initial scraper check for: " + songName);
+        showNoLyrics("正在获取歌词...");
+        
+        // 1. 尝试从 XiaoMusic 获取
+        apiService.getMusicInfo(songName, true).enqueue(new Callback<JsonObject>() {
+            @Override
+            public void onResponse(Call<JsonObject> call, Response<JsonObject> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    JsonObject json = response.body();
+                    if (json.has("tags")) {
+                        JsonObject tags = json.getAsJsonObject("tags");
+                        String artist = tags.has("artist") && !tags.get("artist").isJsonNull() ? tags.get("artist").getAsString() : "";
+                        String pic = tags.has("picture") && !tags.get("picture").isJsonNull() ? tags.get("picture").getAsString() : null;
+                        String lyrics = tags.has("lyrics") && !tags.get("lyrics").isJsonNull() ? tags.get("lyrics").getAsString() : null;
+                        
+                        // 判定是否真的有数据（有些空标签返回的是空字符串）
+                        if (artist.isEmpty() && (pic == null || pic.isEmpty()) && (lyrics == null || lyrics.isEmpty())) {
+                            startExternalScrapeFlow(songName);
+                            return;
+                        }
+
+                        // 更新 UI：歌手
+                        if (!artist.isEmpty()) tvBigArtist.setText(artist);
+                        
+                        // 更新 UI：封面
+                        if (pic != null && !pic.isEmpty()) {
+                            String finalPic = pic;
+                            if (!finalPic.startsWith("http")) {
+                                String base = baseUrl;
+                                if (!base.endsWith("/")) base += "/";
+                                finalPic = base + (finalPic.startsWith("/") ? finalPic.substring(1) : finalPic);
+                            }
+                            Glide.with(PlayerActivity.this).load(finalPic)
+                                .placeholder(R.drawable.ic_cover_placeholder)
+                                .transform(new RoundedCorners(80)).into(ivBigCover);
+                            Glide.with(PlayerActivity.this).load(finalPic)
+                                .transform(new jp.wasabeef.glide.transformations.BlurTransformation(20, 3))
+                                .into(ivBlurBackground);
+                        } else {
+                            // 缺封面，去第三方补
+                            startExternalScrapeFlow(songName);
+                            return;
+                        }
+                        
+                        // 更新 UI：歌词
+                        if (lyrics != null && !lyrics.isEmpty()) {
+                            parseLyrics(lyrics);
+                        } else {
+                            // 缺歌词，去第三方补
+                            startExternalScrapeFlow(songName);
+                        }
+                    } else {
+                        startExternalScrapeFlow(songName);
+                    }
+                } else {
+                    startExternalScrapeFlow(songName);
+                }
+            }
+
+            @Override
+            public void onFailure(Call<JsonObject> call, Throwable t) {
+                startExternalScrapeFlow(songName);
+            }
+        });
+    }
+
+    private void startExternalScrapeFlow(String songName) {
+        if (songScraper == null) return;
+        
+        // 获取当前的歌手信息作为提示
+        String artistHint = tvBigArtist.getText().toString();
+        if ("加载中...".equals(artistHint) || "未知艺术家".equals(artistHint)) {
+            artistHint = "";
+        }
+
+        Log.d(TAG, "Starting external scrape flow for: " + songName + " with hint: " + artistHint);
+        
+        // 增加 15 秒超时保护
+        handler.removeCallbacks(scrapeTimeoutRunnable);
+        handler.postDelayed(scrapeTimeoutRunnable, 15000);
+
+        final String finalArtistHint = artistHint;
+        songScraper.scrape(songName, finalArtistHint, new SongScraper.ScrapeCallback() {
+            @Override
+            public void onSuccess(String artist, String picUrl, String lyrics) {
+                runOnUiThread(() -> {
+                    handler.removeCallbacks(scrapeTimeoutRunnable);
+                    Log.d(TAG, "External scrape onSuccess UI update. picUrl=" + picUrl);
+                    // 更新歌手
+                    if (artist != null && !artist.isEmpty()) {
+                        tvBigArtist.setText(artist);
+                    }
+                    
+                    // 更新封面
+                    if (picUrl != null && !picUrl.isEmpty()) {
+                        Glide.with(PlayerActivity.this)
+                            .load(picUrl)
+                            .apply(new RequestOptions()
+                                .placeholder(R.drawable.ic_cover_placeholder)
+                                .error(R.drawable.ic_cover_placeholder)
+                                .transform(new RoundedCorners(80)))
+                            .listener(new com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable>() {
+                                @Override
+                                public boolean onLoadFailed(@Nullable com.bumptech.glide.load.engine.GlideException e, Object model, com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target, boolean isFirstResource) {
+                                    Log.e(TAG, "Glide Load Failed for picUrl: " + picUrl, e);
+                                    return false;
+                                }
+                                @Override
+                                public boolean onResourceReady(android.graphics.drawable.Drawable resource, Object model, com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target, com.bumptech.glide.load.DataSource dataSource, boolean isFirstResource) {
+                                    Log.d(TAG, "Glide Load Success for picUrl: " + picUrl);
+                                    return false;
+                                }
+                            })
+                            .into(ivBigCover);
+                            
+                        Glide.with(PlayerActivity.this)
+                            .load(picUrl)
+                            .apply(new RequestOptions()
+                                .transform(new jp.wasabeef.glide.transformations.BlurTransformation(20, 3)))
+                            .into(ivBlurBackground);
+                    } else {
+                         ivBigCover.setImageResource(R.drawable.ic_cover_placeholder);
+                         ivBlurBackground.setImageResource(android.R.color.black);
+                    }
+                    
+                    // 更新歌词
+                    if (lyrics != null && !lyrics.isEmpty()) {
+                        parseLyrics(lyrics);
+                    } else {
+                        showNoLyrics("暂无当前歌曲歌词");
+                    }
+                });
+            }
+
+            @Override
+            public void onError(String msg) {
+                runOnUiThread(() -> {
+                    handler.removeCallbacks(scrapeTimeoutRunnable);
+                    Log.e(TAG, "External scrape onError: " + msg);
+                    showNoLyrics("暂无歌词");
+                });
+            }
+        });
     }
 
 

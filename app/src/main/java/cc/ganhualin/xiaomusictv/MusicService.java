@@ -20,6 +20,7 @@ import retrofit2.Response;
 public class MusicService extends MediaSessionService {
     private MediaSession mediaSession;
     private ExoPlayer player;
+    private SongScraper songScraper;
 
     private static final String PREFS_NAME = "XiaoMusicPrefs";
     private static final String KEY_USERNAME = "username";
@@ -136,6 +137,7 @@ public class MusicService extends MediaSessionService {
         DefaultMediaNotificationProvider notificationProvider = new DefaultMediaNotificationProvider.Builder(this)
                 .build();
         setMediaNotificationProvider(notificationProvider);
+        songScraper = new SongScraper();
     }
 
     private void enrichMetadata(MediaItem mediaItem) {
@@ -165,39 +167,78 @@ public class MusicService extends MediaSessionService {
                         String pic = tags.has("picture") && !tags.get("picture").isJsonNull() ? tags.get("picture").getAsString() : null;
                         String lyrics = tags.has("lyrics") && !tags.get("lyrics").isJsonNull() ? tags.get("lyrics").getAsString() : null;
                         
-                        if (pic != null && !pic.startsWith("http")) {
-                            android.content.SharedPreferences s = getSharedPreferences(PREFS_NAME, 0);
-                            String base = s.getString("server_url", "");
-                            if (!base.endsWith("/")) base += "/";
-                            pic = base + (pic.startsWith("/") ? pic.substring(1) : pic);
+                        if (pic != null && !pic.isEmpty()) {
+                            if (!pic.startsWith("http")) {
+                                android.content.SharedPreferences s = getSharedPreferences(PREFS_NAME, 0);
+                                String base = s.getString("server_url", "");
+                                if (!base.endsWith("/")) base += "/";
+                                pic = base + (pic.startsWith("/") ? pic.substring(1) : pic);
+                            }
                         }
 
-                        // Update current item if it's still the same
-                        MediaItem current = player.getCurrentMediaItem();
-                        if (current != null && current.mediaId.equals(mediaItem.mediaId)) {
-                             MediaMetadata.Builder metaBuilder = current.mediaMetadata.buildUpon();
-                             if (!artist.isEmpty()) metaBuilder.setArtist(artist);
-                             if (!album.isEmpty()) metaBuilder.setAlbumTitle(album);
-                             if (pic != null) metaBuilder.setArtworkUri(android.net.Uri.parse(pic));
-                             
-                             // Store lyrics in extras
-                             android.os.Bundle extras = current.mediaMetadata.extras != null ? 
-                                 new android.os.Bundle(current.mediaMetadata.extras) : new android.os.Bundle();
-                             if (lyrics != null) extras.putString("lyrics", lyrics);
-                             metaBuilder.setExtras(extras);
-                             
-                             MediaItem newItem = current.buildUpon()
-                                 .setMediaMetadata(metaBuilder.build())
-                                 .build();
-                             
-                             // replaceMediaItem handles the metadata update without stopping playback
-                             player.replaceMediaItem(player.getCurrentMediaItemIndex(), newItem);
+                        // 如果基本信息依然缺失，尝试第三方刮削
+                        if ((pic == null || pic.isEmpty()) || (lyrics == null || lyrics.isEmpty())) {
+                            triggerExternalScrape(mediaItem, finalSongName);
                         }
+
+                        // 更新已有的元数据
+                        updateMediaItemMetadata(mediaItem, artist, album, pic, lyrics);
+                    } else {
+                        // tags 为空，触发第三方刮削
+                        triggerExternalScrape(mediaItem, finalSongName);
                     }
+                } else {
+                    // 请求失败，触发第三方刮削
+                    triggerExternalScrape(mediaItem, finalSongName);
                 }
             }
-            @Override public void onFailure(Call<JsonObject> call, Throwable t) {}
+
+            @Override
+            public void onFailure(Call<JsonObject> call, Throwable t) {
+                triggerExternalScrape(mediaItem, finalSongName);
+            }
         });
+    }
+
+    private void triggerExternalScrape(MediaItem mediaItem, String songName) {
+        if (songScraper == null) return;
+        String artistHint = "";
+        if (mediaItem.mediaMetadata.artist != null) {
+            artistHint = mediaItem.mediaMetadata.artist.toString();
+        }
+        
+        songScraper.scrape(songName, artistHint, new SongScraper.ScrapeCallback() {
+            @Override
+            public void onSuccess(String artist, String picUrl, String lyrics) {
+                updateMediaItemMetadata(mediaItem, artist, "", picUrl, lyrics);
+            }
+
+            @Override
+            public void onError(String msg) {
+                android.util.Log.e("MusicService", "External scrape failed: " + msg);
+            }
+        });
+    }
+
+    private void updateMediaItemMetadata(MediaItem mediaItem, String artist, String album, String pic, String lyrics) {
+        MediaItem current = player.getCurrentMediaItem();
+        if (current != null && current.mediaId.equals(mediaItem.mediaId)) {
+            MediaMetadata.Builder metaBuilder = current.mediaMetadata.buildUpon();
+            if (artist != null && !artist.isEmpty()) metaBuilder.setArtist(artist);
+            if (album != null && !album.isEmpty()) metaBuilder.setAlbumTitle(album);
+            if (pic != null && !pic.isEmpty()) metaBuilder.setArtworkUri(android.net.Uri.parse(pic));
+            
+            android.os.Bundle extras = current.mediaMetadata.extras != null ? 
+                new android.os.Bundle(current.mediaMetadata.extras) : new android.os.Bundle();
+            if (lyrics != null && !lyrics.isEmpty()) extras.putString("lyrics", lyrics);
+            metaBuilder.setExtras(extras);
+            
+            MediaItem newItem = current.buildUpon()
+                .setMediaMetadata(metaBuilder.build())
+                .build();
+            
+            player.replaceMediaItem(player.getCurrentMediaItemIndex(), newItem);
+        }
     }
 
     @Override
