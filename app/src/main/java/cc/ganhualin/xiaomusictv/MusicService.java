@@ -76,11 +76,14 @@ public class MusicService extends MediaSessionService {
                                                 if (finalUrl.startsWith("/")) finalUrl = base + finalUrl.substring(1);
                                                 else finalUrl = base + finalUrl;
                                             }
-                                            return dataSpec.withUri(android.net.Uri.parse(finalUrl));
+                                            String encodedTarget = android.net.Uri.encode(finalUrl, "@#&=*+-_.,:!?()/~'%");
+                                            return dataSpec.withUri(android.net.Uri.parse(encodedTarget));
                                         }
                                     }
                                 } catch (Exception e) {
                                     e.printStackTrace();
+                                    // Log this specific exception
+                                    android.util.Log.e("MusicService", "Failed to resolve URL: " + e.getMessage());
                                 }
                             }
                         }

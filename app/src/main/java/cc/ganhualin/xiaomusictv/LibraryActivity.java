@@ -786,8 +786,17 @@ public class LibraryActivity extends AppCompatActivity {
                         // Native ExoPlayer handles queue transition via MediaItems now.
                     }
                     @Override public void onPlayerError(PlaybackException error) {
-                        Log.e(TAG, "Player Error: " + error.getMessage());
-                        Toast.makeText(LibraryActivity.this, "播放失败: " + error.getMessage(), Toast.LENGTH_LONG).show();
+                        String errorMsg = error.getErrorCodeName() + " - " + error.getMessage();
+                        Throwable cause = error.getCause();
+                        if (cause != null) {
+                            if (cause.getMessage() != null) {
+                                errorMsg += "\nCause: " + cause.getMessage();
+                            } else {
+                                errorMsg += "\nCause: " + cause.toString();
+                            }
+                        }
+                        Log.e(TAG, "Player Error Details: " + errorMsg);
+                        Toast.makeText(LibraryActivity.this, "播放失败: " + errorMsg, Toast.LENGTH_LONG).show();
                     }
                 });
                 if (player.getCurrentMediaItem() != null) {

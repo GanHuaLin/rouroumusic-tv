@@ -707,6 +707,20 @@ public class PlayerActivity extends AppCompatActivity {
             public void onShuffleModeEnabledChanged(boolean shuffleModeEnabled) {
                 updateControlsUI();
             }
+            @Override
+            public void onPlayerError(androidx.media3.common.PlaybackException error) {
+                String errorMsg = error.getErrorCodeName() + " - " + error.getMessage();
+                Throwable cause = error.getCause();
+                if (cause != null) {
+                    if (cause.getMessage() != null) {
+                        errorMsg += "\nCause: " + cause.getMessage();
+                    } else {
+                        errorMsg += "\nCause: " + cause.toString();
+                    }
+                }
+                Log.e(TAG, "Player Error: " + errorMsg);
+                Toast.makeText(PlayerActivity.this, "播放失败: " + errorMsg, Toast.LENGTH_LONG).show();
+            }
         });
         
         // Enforce Default Mode: List Loop (REPEAT_MODE_ALL)
