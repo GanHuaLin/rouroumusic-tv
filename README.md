@@ -16,6 +16,7 @@ https://github.com/GanHuaLin/rouroumusic-tv
   - 播放列表抽屉，支持快速切歌。
 - 🔗 **便捷连接**：支持输入服务器地址，配合 `xiaomusic` 后端使用。
 - 🚀 **原生性能**：基于 Android 原生 Java 开发，启动快、运行稳、占用低。
+- ✅ **已测试设备**：小米TV澎湃OS2、小米TV澎湃OS3。
 
 ---
 
