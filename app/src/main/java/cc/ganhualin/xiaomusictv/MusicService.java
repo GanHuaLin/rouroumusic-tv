@@ -85,6 +85,10 @@ public class MusicService extends MediaSessionService {
                                     // Log this specific exception
                                     android.util.Log.e("MusicService", "Failed to resolve URL: " + e.getMessage());
                                 }
+                                // If we reach here, resolution failed.
+                                // Instead of crashing with 'unknown protocol: xiaomusic',
+                                // we return a dummy valid URI (e.g., empty string or invalid http) to fail gracefully.
+                                return dataSpec.withUri(android.net.Uri.parse("http://127.0.0.1/dummy_error.mp3"));
                             }
                         }
                         return dataSpec;
@@ -95,6 +99,22 @@ public class MusicService extends MediaSessionService {
             playerBuilder.setMediaSourceFactory(
                 new androidx.media3.exoplayer.source.DefaultMediaSourceFactory(this)
                     .setDataSourceFactory(resolvingFactory)
+            );
+        } else {
+            // Setup a default resolving factory even if no credentials so xiaomusic:// doesn't crash player immediately
+            androidx.media3.datasource.DataSource.Factory dataSourceFactory = new androidx.media3.datasource.DefaultDataSource.Factory(this);
+            androidx.media3.datasource.ResolvingDataSource.Factory dummyResolvingFactory = new androidx.media3.datasource.ResolvingDataSource.Factory(
+                dataSourceFactory,
+                new androidx.media3.datasource.ResolvingDataSource.Resolver() {
+                    @Override
+                    public androidx.media3.datasource.DataSpec resolveDataSpec(androidx.media3.datasource.DataSpec dataSpec) {
+                        return dataSpec;
+                    }
+                }
+            );
+            playerBuilder.setMediaSourceFactory(
+                new androidx.media3.exoplayer.source.DefaultMediaSourceFactory(this)
+                    .setDataSourceFactory(dummyResolvingFactory)
             );
         }
 
