@@ -58,7 +58,7 @@ public class MusicService extends MediaSessionService {
                     @Override
                     public androidx.media3.datasource.DataSpec resolveDataSpec(androidx.media3.datasource.DataSpec dataSpec) {
                         android.net.Uri uri = dataSpec.uri;
-                        if ("xiaomusic".equals(uri.getScheme())) {
+                        if ("/xiaomusic_resolve".equals(uri.getPath())) {
                             String songName = uri.getQueryParameter("name");
                             if (songName != null) {
                                 try {

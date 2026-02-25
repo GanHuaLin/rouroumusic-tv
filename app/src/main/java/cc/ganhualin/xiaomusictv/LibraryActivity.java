@@ -701,7 +701,9 @@ public class LibraryActivity extends AppCompatActivity {
             } catch (Exception e) {
                 encodedName = songName;
             }
-            android.net.Uri fakeUri = android.net.Uri.parse("xiaomusic://song?name=" + encodedName);
+            // 使用标准的 http 协议代替自定义协议，彻底根除老电视对于未知协议的排斥
+            // 我们构造一个本机的虚拟 HTTP 地址作为标记
+            android.net.Uri fakeUri = android.net.Uri.parse("http://127.0.0.1/xiaomusic_resolve?name=" + encodedName);
             
             android.os.Bundle extras = new android.os.Bundle();
             extras.putString("original_name", songName);
