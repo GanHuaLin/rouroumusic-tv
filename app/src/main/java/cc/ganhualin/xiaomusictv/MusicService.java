@@ -37,86 +37,72 @@ public class MusicService extends MediaSessionService {
 
         androidx.media3.exoplayer.ExoPlayer.Builder playerBuilder = new androidx.media3.exoplayer.ExoPlayer.Builder(this);
 
+        androidx.media3.datasource.DefaultHttpDataSource.Factory httpDataSourceFactory = 
+            new androidx.media3.datasource.DefaultHttpDataSource.Factory()
+                .setAllowCrossProtocolRedirects(true)
+                .setUserAgent("RouRouMusicTV-Native/1.0");
+
         if (!username.isEmpty() && !password.isEmpty()) {
             String credentials = username + ":" + password;
             String basic = "Basic " + android.util.Base64.encodeToString(credentials.getBytes(), android.util.Base64.NO_WRAP);
-            
             java.util.Map<String, String> headers = new java.util.HashMap<>();
             headers.put("Authorization", basic);
-
-            androidx.media3.datasource.DefaultHttpDataSource.Factory httpDataSourceFactory = 
-                new androidx.media3.datasource.DefaultHttpDataSource.Factory()
-                    .setAllowCrossProtocolRedirects(true)
-                    .setUserAgent("RouRouMusicTV-Native/1.0")
-                    .setDefaultRequestProperties(headers);
-            
-            androidx.media3.datasource.DataSource.Factory dataSourceFactory = httpDataSourceFactory;
-            
-            androidx.media3.datasource.ResolvingDataSource.Factory resolvingFactory = new androidx.media3.datasource.ResolvingDataSource.Factory(
-                dataSourceFactory,
-                new androidx.media3.datasource.ResolvingDataSource.Resolver() {
-                    @Override
-                    public androidx.media3.datasource.DataSpec resolveDataSpec(androidx.media3.datasource.DataSpec dataSpec) {
-                        android.net.Uri uri = dataSpec.uri;
-                        if ("/xiaomusic_resolve".equals(uri.getPath())) {
-                            String songName = uri.getQueryParameter("name");
-                            if (songName != null) {
-                                try {
-                                    ApiService apiService = RetrofitClient.getClient(MusicService.this).create(ApiService.class);
-                                    retrofit2.Response<com.google.gson.JsonObject> response = apiService.getMusicInfo(songName, true).execute();
-                                    if (response.isSuccessful() && response.body() != null) {
-                                        com.google.gson.JsonObject json = response.body();
-                                        String rawUrl = json.has("url") ? json.get("url").getAsString() : null;
-                                        if (rawUrl != null) {
-                                            String finalUrl = rawUrl;
-                                            android.content.SharedPreferences s = getSharedPreferences(PREFS_NAME, 0);
-                                            String base = s.getString("server_url", "");
-                                            if (!base.endsWith("/")) base += "/";
-                                            if (!finalUrl.startsWith("http")) {
-                                                if (finalUrl.startsWith("/")) finalUrl = base + finalUrl.substring(1);
-                                                else finalUrl = base + finalUrl;
-                                            }
-                                            String encodedTarget = android.net.Uri.encode(finalUrl, "@#&=*+-_.,:!?()/~'%");
-                                            return dataSpec.withUri(android.net.Uri.parse(encodedTarget));
-                                        }
-                                    }
-                                } catch (Exception e) {
-                                    e.printStackTrace();
-                                    // Log this specific exception
-                                    android.util.Log.e("MusicService", "Failed to resolve URL: " + e.getMessage());
-                                }
-                                // If we reach here, resolution failed.
-                                // Instead of crashing with 'unknown protocol: xiaomusic',
-                                // we return a dummy valid URI (e.g., empty string or invalid http) to fail gracefully.
-                                return dataSpec.withUri(android.net.Uri.parse("http://127.0.0.1/dummy_error.mp3"));
-                            }
-                        }
-                        return dataSpec;
-                    }
-                }
-            );
-
-            playerBuilder.setMediaSourceFactory(
-                new androidx.media3.exoplayer.source.DefaultMediaSourceFactory(this)
-                    .setDataSourceFactory(resolvingFactory)
-            );
-        } else {
-            // Setup a default resolving factory even if no credentials so xiaomusic:// doesn't crash player immediately
-            androidx.media3.datasource.DataSource.Factory dataSourceFactory = new androidx.media3.datasource.DefaultDataSource.Factory(this);
-            androidx.media3.datasource.ResolvingDataSource.Factory dummyResolvingFactory = new androidx.media3.datasource.ResolvingDataSource.Factory(
-                dataSourceFactory,
-                new androidx.media3.datasource.ResolvingDataSource.Resolver() {
-                    @Override
-                    public androidx.media3.datasource.DataSpec resolveDataSpec(androidx.media3.datasource.DataSpec dataSpec) {
-                        return dataSpec;
-                    }
-                }
-            );
-            playerBuilder.setMediaSourceFactory(
-                new androidx.media3.exoplayer.source.DefaultMediaSourceFactory(this)
-                    .setDataSourceFactory(dummyResolvingFactory)
-            );
+            httpDataSourceFactory.setDefaultRequestProperties(headers);
         }
+
+        androidx.media3.datasource.DataSource.Factory dataSourceFactory = httpDataSourceFactory;
+        
+        androidx.media3.datasource.ResolvingDataSource.Factory resolvingFactory = new androidx.media3.datasource.ResolvingDataSource.Factory(
+            dataSourceFactory,
+            new androidx.media3.datasource.ResolvingDataSource.Resolver() {
+                @Override
+                public androidx.media3.datasource.DataSpec resolveDataSpec(androidx.media3.datasource.DataSpec dataSpec) throws java.io.IOException {
+                    android.net.Uri uri = dataSpec.uri;
+                    if ("/xiaomusic_resolve".equals(uri.getPath())) {
+                        String songName = uri.getQueryParameter("name");
+                        if (songName != null) {
+                            try {
+                                ApiService apiService = RetrofitClient.getClient(MusicService.this).create(ApiService.class);
+                                retrofit2.Response<com.google.gson.JsonObject> response = apiService.getMusicInfo(songName, true).execute();
+                                if (response.isSuccessful() && response.body() != null) {
+                                    com.google.gson.JsonObject json = response.body();
+                                    String rawUrl = json.has("url") ? json.get("url").getAsString() : null;
+                                    if (rawUrl != null) {
+                                        String finalUrl = rawUrl;
+                                        android.content.SharedPreferences s = getSharedPreferences(PREFS_NAME, 0);
+                                        String base = s.getString("server_url", "");
+                                        if (!base.endsWith("/")) base += "/";
+                                        if (!finalUrl.startsWith("http")) {
+                                            if (finalUrl.startsWith("/")) finalUrl = base + finalUrl.substring(1);
+                                            else finalUrl = base + finalUrl;
+                                        }
+                                        String encodedTarget = android.net.Uri.encode(finalUrl, "@#&=*+-_.,:!?()/~'%");
+                                        return dataSpec.withUri(android.net.Uri.parse(encodedTarget));
+                                    }
+                                } else {
+                                    throw new java.io.IOException("API Error: HTTP " + response.code());
+                                }
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                                android.util.Log.e("MusicService", "Failed to resolve URL: " + e.getMessage());
+                                if (e instanceof java.io.IOException) {
+                                    throw (java.io.IOException) e;
+                                } else {
+                                    throw new java.io.IOException(e.getMessage(), e);
+                                }
+                            }
+                            throw new java.io.IOException("Failed to get music URL from Info API.");
+                        }
+                    }
+                    return dataSpec;
+                }
+            }
+        );
+
+        playerBuilder.setMediaSourceFactory(
+            new androidx.media3.exoplayer.source.DefaultMediaSourceFactory(this)
+                .setDataSourceFactory(resolvingFactory)
+        );
 
         // Configure audio attributes for music playback
         AudioAttributes audioAttributes = new AudioAttributes.Builder()
