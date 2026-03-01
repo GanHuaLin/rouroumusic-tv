@@ -772,7 +772,13 @@ public class LibraryActivity extends AppCompatActivity {
                                 .putString("last_playlist_name", currentPlaylistName)
                                 .apply();
                             
-                            if (mediaItem.mediaMetadata.artworkUri != null) {
+                            if (mediaItem.mediaMetadata.artworkData != null) {
+                                Glide.with(LibraryActivity.this)
+                                    .load(mediaItem.mediaMetadata.artworkData)
+                                    .placeholder(R.drawable.ic_cover_placeholder)
+                                    .error(R.drawable.ic_cover_placeholder)
+                                    .into(ivCurrentCover);
+                            } else if (mediaItem.mediaMetadata.artworkUri != null) {
                                 Glide.with(LibraryActivity.this)
                                     .load(mediaItem.mediaMetadata.artworkUri)
                                     .placeholder(R.drawable.ic_cover_placeholder)
@@ -805,7 +811,13 @@ public class LibraryActivity extends AppCompatActivity {
                     MediaItem current = player.getCurrentMediaItem();
                     String title = current.mediaMetadata.title.toString();
                     tvCurrentTitle.setText(title);
-                    if (current.mediaMetadata.artworkUri != null) {
+                    if (current.mediaMetadata.artworkData != null) {
+                        Glide.with(LibraryActivity.this)
+                            .load(current.mediaMetadata.artworkData)
+                            .placeholder(R.drawable.ic_cover_placeholder)
+                            .error(R.drawable.ic_cover_placeholder)
+                            .into(ivCurrentCover);
+                    } else if (current.mediaMetadata.artworkUri != null) {
                         Glide.with(LibraryActivity.this)
                             .load(current.mediaMetadata.artworkUri)
                             .placeholder(R.drawable.ic_cover_placeholder)

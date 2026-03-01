@@ -782,7 +782,17 @@ public class PlayerActivity extends AppCompatActivity {
 
         // 2. 处理封面状态
         boolean hasArtwork = false;
-        if (mediaItem.mediaMetadata.artworkUri != null) {
+        if (mediaItem.mediaMetadata.artworkData != null) {
+            byte[] data = mediaItem.mediaMetadata.artworkData;
+            Glide.with(this).load(data)
+                .placeholder(R.drawable.ic_cover_placeholder)
+                .error(R.drawable.ic_cover_placeholder)
+                .transform(new RoundedCorners(80)).into(ivBigCover);
+            Glide.with(this).load(data)
+                .transform(new jp.wasabeef.glide.transformations.BlurTransformation(20, 3))
+                .into(ivBlurBackground);
+            hasArtwork = true;
+        } else if (mediaItem.mediaMetadata.artworkUri != null) {
             String uri = mediaItem.mediaMetadata.artworkUri.toString();
             Log.d(TAG, "Loading artwork from metadata: " + uri);
             Glide.with(this).load(uri)
@@ -805,7 +815,7 @@ public class PlayerActivity extends AppCompatActivity {
         if (!hasArtwork || lyrics == null || lyrics.isEmpty()) {
             // 只有当歌曲 ID 变化时（或者之前没记录到 ID）才重新触发
             if (!isCurrentlyScraping) {
-                fetchMusicInfoForScraping(queryName);
+                fetchMusicInfoForScraping(queryName, false);
             }
         } else {
             // 如果都全了，重置状态
@@ -813,13 +823,14 @@ public class PlayerActivity extends AppCompatActivity {
         }
     }
 
-    private void fetchMusicInfoForScraping(String songName) {
+    private void fetchMusicInfoForScraping(String songName, boolean forceScrape) {
         if (songName == null || songName.isEmpty()) return;
         
         MediaItem current = player != null ? player.getCurrentMediaItem() : null;
         if (current != null) {
-            if (current.mediaId.equals(currentScrapingId)) return; // 已经在刮削了
-            currentScrapingId = current.mediaId;
+            String targetId = current.mediaId + (forceScrape ? "_forced" : "");
+            if (targetId.equals(currentScrapingId)) return; // 已经在刮削了
+            currentScrapingId = targetId;
         }
         
         // 每次重新开始刮削前，禁用保存功能
@@ -827,8 +838,13 @@ public class PlayerActivity extends AppCompatActivity {
         scrapedPicUrl = "";
         scrapedArtist = "";
         
-        Log.d(TAG, "Triggering initial scraper check for: " + songName);
+        Log.d(TAG, "Triggering initial scraper check for: " + songName + " (force=" + forceScrape + ")");
         showNoLyrics("正在获取歌词...");
+        
+        if (forceScrape) {
+            startExternalScrapeFlow(songName);
+            return;
+        }
         
         // 1. 尝试从 XiaoMusic 获取
         apiService.getMusicInfo(songName, true).enqueue(new Callback<JsonObject>() {
@@ -1171,7 +1187,7 @@ public class PlayerActivity extends AppCompatActivity {
                 break;
             case "重新刮削歌词":
                 currentScrapingId = ""; 
-                fetchMusicInfoForScraping(songTitle);
+                fetchMusicInfoForScraping(songTitle, true);
                 break;
             case "保存当前歌词":
                 // 拼合歌词
@@ -1186,17 +1202,62 @@ public class PlayerActivity extends AppCompatActivity {
                 
                 java.util.Map<String, String> updates = new java.util.HashMap<>();
                 if (!fullLyrics.isEmpty()) updates.put("lyrics", fullLyrics);
-                if (scrapedPicUrl != null && !scrapedPicUrl.isEmpty()) updates.put("picture", scrapedPicUrl);
-                
                 // 如果刮削到了歌手，也可以作为备选存入（在 updateSongTagsBundle 内部判断是否覆盖）
                 if (scrapedArtist != null && !scrapedArtist.isEmpty()) {
                     updates.put("scraped_artist", scrapedArtist);
                 }
                 
-                if (!updates.isEmpty()) {
-                    updateSongTagsBundle(mediaId, updates);
+                if (scrapedPicUrl != null && !scrapedPicUrl.isEmpty() && scrapedPicUrl.startsWith("http")) {
+                    Toast.makeText(this, "正在处理并保存封面，请稍后...", Toast.LENGTH_SHORT).show();
+                    new Thread(() -> {
+                        try {
+                            java.net.URL url = new java.net.URL(scrapedPicUrl);
+                            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+                            conn.setConnectTimeout(5000);
+                            conn.setReadTimeout(5000);
+                            java.io.InputStream is = conn.getInputStream();
+                            android.graphics.Bitmap bitmap = android.graphics.BitmapFactory.decodeStream(is);
+                            if (bitmap != null) {
+                                int maxDim = 800;
+                                int width = bitmap.getWidth();
+                                int height = bitmap.getHeight();
+                                if (width > maxDim || height > maxDim) {
+                                    float ratio = Math.min((float) maxDim / width, (float) maxDim / height);
+                                    width = Math.round(width * ratio);
+                                    height = Math.round(height * ratio);
+                                    bitmap = android.graphics.Bitmap.createScaledBitmap(bitmap, width, height, true);
+                                }
+                                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, baos);
+                                byte[] imageBytes = baos.toByteArray();
+                                String base64 = android.util.Base64.encodeToString(imageBytes, android.util.Base64.NO_WRAP);
+                                // 参考提供的代码，只传裸的 base64 字符串，不带 "data:image/jpeg;base64," 前缀
+                                updates.put("picture", base64);
+                            } else {
+                                updates.put("picture", scrapedPicUrl);
+                            }
+                        } catch (Exception e) {
+                            android.util.Log.e(TAG, "Failed to download image: " + e.getMessage());
+                            updates.put("picture", scrapedPicUrl);
+                        }
+                        
+                        runOnUiThread(() -> {
+                            if (!updates.isEmpty()) {
+                                updateSongTagsBundle(mediaId, updates);
+                            } else {
+                                Toast.makeText(PlayerActivity.this, "无可保存的内容", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }).start();
                 } else {
-                    Toast.makeText(this, "无可保存的内容", Toast.LENGTH_SHORT).show();
+                    if (scrapedPicUrl != null && !scrapedPicUrl.isEmpty()) {
+                        updates.put("picture", scrapedPicUrl);
+                    }
+                    if (!updates.isEmpty()) {
+                        updateSongTagsBundle(mediaId, updates);
+                    } else {
+                        Toast.makeText(this, "无可保存的内容", Toast.LENGTH_SHORT).show();
+                    }
                 }
                 break;
         }

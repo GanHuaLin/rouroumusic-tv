@@ -151,7 +151,7 @@ public class MusicService extends MediaSessionService {
 
     private void enrichMetadata(MediaItem mediaItem) {
         // Only enrich if metadata is incomplete
-        if (mediaItem.mediaMetadata.artworkUri != null && mediaItem.mediaMetadata.artist != null) {
+        if ((mediaItem.mediaMetadata.artworkUri != null || mediaItem.mediaMetadata.artworkData != null) && mediaItem.mediaMetadata.artist != null) {
             return; 
         }
 
@@ -235,6 +235,7 @@ public class MusicService extends MediaSessionService {
             MediaMetadata.Builder metaBuilder = current.mediaMetadata.buildUpon();
             if (artist != null && !artist.isEmpty()) metaBuilder.setArtist(artist);
             if (album != null && !album.isEmpty()) metaBuilder.setAlbumTitle(album);
+
             if (pic != null && !pic.isEmpty()) metaBuilder.setArtworkUri(android.net.Uri.parse(pic));
             
             android.os.Bundle extras = current.mediaMetadata.extras != null ? 
