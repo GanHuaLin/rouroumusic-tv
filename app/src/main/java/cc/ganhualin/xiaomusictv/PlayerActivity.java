@@ -57,6 +57,8 @@ public class PlayerActivity extends AppCompatActivity {
     private android.view.View layoutOptionMenu;
     private RecyclerView rvOptions;
     private PlayerOptionAdapter optionAdapter;
+    private long currentLyricOffsetMs = 0;
+    private long initialLyricOffsetMs = 0;
     private String scrapedPicUrl = ""; // 用于保存刮削到的封面地址
     private String scrapedArtist = ""; // 用于保存刮削到的歌手名
     private boolean isFavorited = false;
@@ -95,6 +97,8 @@ public class PlayerActivity extends AppCompatActivity {
     private long lastRightClickTime = 0;
     private static final long DOUBLE_CLICK_INTERVAL = 300;
     private boolean isSeeking = false;
+    private long lastKnownDuration = 0;
+    private android.view.View viewFocusedBeforeOptionMenu = null;
     private final Runnable seekForwardRunnable = new Runnable() {
         @Override public void run() {
             if (player != null) {
@@ -120,8 +124,12 @@ public class PlayerActivity extends AppCompatActivity {
         handler.removeCallbacks(hideSeekHintRunnable);
         long current = player.getCurrentPosition();
         long duration = player.getDuration();
+        if (duration <= 0 && lastKnownDuration > 0) {
+            duration = lastKnownDuration;
+        }
         String prefix = isForward ? "▶▶ " : "◀◀ ";
-        tvSeekProgress.setText(prefix + formatTime(current) + " / " + formatTime(duration));
+        String durationStr = (duration <= 0) ? "..." : formatTime(duration);
+        tvSeekProgress.setText(prefix + formatTime(current) + " / " + durationStr);
         layoutSeekProgress.setVisibility(View.VISIBLE);
     }
 
@@ -190,11 +198,54 @@ public class PlayerActivity extends AppCompatActivity {
         List<String> options = new ArrayList<>();
         options.add("修改歌手名");
         options.add("重新刮削歌词");
+        options.add("歌词延时调整");
         options.add("保存当前歌词");
         
-        optionAdapter = new PlayerOptionAdapter(options, (option, position) -> {
-            handleOptionClick(option);
+        optionAdapter = new PlayerOptionAdapter(options, new PlayerOptionAdapter.OnOptionInteractionListener() {
+            @Override
+            public void onOptionClick(String option, int position) {
+                if (!option.equals("歌词延时调整")) {
+                    handleOptionClick(option);
+                }
+            }
+            
+            @Override
+            public boolean onOptionLeftRight(String option, int direction, int position) {
+                if (option.equals("歌词延时调整")) {
+                    currentLyricOffsetMs += (direction * 100);
+                    if (player != null) {
+                        updateLyric(player.getCurrentPosition());
+                    }
+                    // 检查是否有变动，决定是否允许保存
+                    if (optionAdapter != null) {
+                        boolean hasChanged = (currentLyricOffsetMs != initialLyricOffsetMs) || (scrapedPicUrl != null && !scrapedPicUrl.isEmpty());
+                        boolean oldDisabled = optionAdapter.isOptionDisabled("保存当前歌词");
+                        if (oldDisabled != !hasChanged) {
+                            optionAdapter.setOptionDisabledNoNotify("保存当前歌词", !hasChanged);
+                            optionAdapter.notifyOptionChanged("保存当前歌词");
+                        }
+                    }
+                    return true;
+                }
+                return false;
+            }
+            
+            @Override
+            public String getOptionText(String option, boolean hasFocus) {
+                if (option.equals("歌词延时调整")) {
+                    float sec = currentLyricOffsetMs / 1000f;
+                    if (Math.abs(sec) < 0.05f) sec = 0.0f;
+                    String sign = sec > 0.04f ? "+" : "";
+                    String text = String.format("歌词延时: %s%.1fs", sign, sec);
+                    if (hasFocus) {
+                        return "◀  " + text + "  ▶";
+                    }
+                    return text;
+                }
+                return option;
+            }
         });
+        optionAdapter.setOptionDisabled("歌词延时调整", true);
         optionAdapter.setOptionDisabled("保存当前歌词", true);
         rvOptions.setAdapter(optionAdapter);
         layoutOptionMenu.findViewById(R.id.viewOptionMenuDim).setOnClickListener(v -> toggleOptionMenu(false));
@@ -548,6 +599,9 @@ public class PlayerActivity extends AppCompatActivity {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser && player != null) {
                     long duration = player.getDuration();
+                    if (duration <= 0 && lastKnownDuration > 0) {
+                        duration = lastKnownDuration;
+                    }
                     if (duration > 0) {
                          long newPos = (duration * progress) / 100;
                          tvCurrentTime.setText(formatTime(newPos));
@@ -555,7 +609,7 @@ public class PlayerActivity extends AppCompatActivity {
                          
                          // Instantly trace tooltip changes
                          if (layoutTooltip.getVisibility() == View.VISIBLE) {
-                             tvTooltip.setText(formatTime(newPos) + "/" + formatTime(duration));
+                             tvTooltip.setText(formatTime(newPos) + " / " + formatTime(duration));
                              int availableWidth = seekBar.getWidth() - seekBar.getPaddingLeft() - seekBar.getPaddingRight();
                              float thumbX = seekBar.getPaddingLeft() + (availableWidth * (float) progress / 100f);
                              layoutTooltip.setTranslationX(thumbX - (layoutTooltip.getWidth() / 2f));
@@ -691,6 +745,11 @@ public class PlayerActivity extends AppCompatActivity {
         player.addListener(new Player.Listener() {
             @Override
             public void onMediaItemTransition(@Nullable MediaItem mediaItem, int reason) {
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                    if (layoutOptionMenu != null && layoutOptionMenu.getVisibility() == View.VISIBLE) {
+                        toggleOptionMenu(false);
+                    }
+                }
                 updateMetadata(mediaItem);
             }
             @Override
@@ -736,6 +795,7 @@ public class PlayerActivity extends AppCompatActivity {
     }
 
     private void updateMetadata(MediaItem mediaItem) {
+        lastKnownDuration = 0;
         if (mediaItem == null) return;
         
         CharSequence titleSeq = mediaItem.mediaMetadata.title;
@@ -769,15 +829,35 @@ public class PlayerActivity extends AppCompatActivity {
 
         // 1. 处理歌词状态
         boolean isCurrentlyScraping = mediaItem.mediaId.equals(currentScrapingId);
-        if (lyrics != null && !lyrics.isEmpty()) {
+        boolean hasLyrics = lyrics != null && !lyrics.isEmpty();
+        
+        currentLyricOffsetMs = 0; // 重置偏移量，等待 parseLyrics 从文件标签中读取值
+        
+        if (hasLyrics) {
             String lyricArtist = extractArtistFromLyrics(lyrics);
             if (lyricArtist != null && !lyricArtist.isEmpty()) {
                 tvBigArtist.setText(lyricArtist);
             }
             parseLyrics(lyrics);
-        } else if (!isCurrentlyScraping) {
-            // 只有当不在抓取中时，才显示初始的“加载”状态
-            showNoLyrics("加载歌词...");
+            // 解析完歌词后，currentLyricOffsetMs 可能会被 parseLyrics 里的 [offset:] 标签更新
+            initialLyricOffsetMs = currentLyricOffsetMs; 
+            
+            if (optionAdapter != null) {
+                optionAdapter.setOptionDisabled("歌词延时调整", false);
+                // 刚加载时，没有调整也没有刮削图，保存设为禁用
+                optionAdapter.setOptionDisabled("保存当前歌词", true);
+                optionAdapter.notifyDataSetChanged();
+            }
+        } else {
+            if (optionAdapter != null) {
+                optionAdapter.setOptionDisabled("歌词延时调整", true);
+                optionAdapter.setOptionDisabled("保存当前歌词", true);
+                optionAdapter.notifyDataSetChanged();
+            }
+            if (!isCurrentlyScraping) {
+                // 只有当不在抓取中时，才显示初始的“加载”状态
+                showNoLyrics("加载歌词...");
+            }
         }
 
         // 2. 处理封面状态
@@ -974,7 +1054,10 @@ public class PlayerActivity extends AppCompatActivity {
                         // 刮削到歌词或封面，启用保存功能
                         scrapedPicUrl = picUrl;
                         scrapedArtist = artist;
-                        if (optionAdapter != null) optionAdapter.setOptionDisabled("保存当前歌词", false);
+                        if (optionAdapter != null) {
+                            optionAdapter.setOptionDisabled("歌词延时调整", false);
+                            optionAdapter.setOptionDisabled("保存当前歌词", false);
+                        }
                     } else {
                         showNoLyrics("暂无当前歌曲歌词");
                     }
@@ -1013,6 +1096,18 @@ public class PlayerActivity extends AppCompatActivity {
                      String timePart = line.substring(1, closing);
                      String textPart = line.substring(closing + 1).trim();
                      
+                     if (timePart.toLowerCase().startsWith("offset:")) {
+                         try {
+                             long fileOffset = Long.parseLong(timePart.substring(7).trim());
+                             // 只有在本地没有记录（为0）的情况下才使用文件自带的 offset
+                             if (currentLyricOffsetMs == 0) {
+                                 currentLyricOffsetMs = fileOffset;
+                                 Log.d(TAG, "Using offset from lyric file: " + currentLyricOffsetMs);
+                             }
+                         } catch (Exception e) {}
+                         continue;
+                     }
+
                      try {
                          String[] parts = timePart.split(":");
                          if (parts.length >= 2) {
@@ -1086,6 +1181,12 @@ public class PlayerActivity extends AppCompatActivity {
         long current = player.getCurrentPosition();
         long duration = player.getDuration();
         
+        if (duration > 0) {
+            lastKnownDuration = duration;
+        } else if (lastKnownDuration > 0) {
+            duration = lastKnownDuration;
+        }
+
         tvCurrentTime.setText(formatTime(current));
         tvDuration.setText(formatTime(duration));
         if (duration > 0) {
@@ -1094,7 +1195,7 @@ public class PlayerActivity extends AppCompatActivity {
             
             // Update Tooltip
             if (layoutTooltip.getVisibility() == View.VISIBLE) {
-                tvTooltip.setText(formatTime(current) + "/" + formatTime(duration));
+                tvTooltip.setText(formatTime(current) + " / " + formatTime(duration));
                 int availableWidth = progressBar.getWidth() - progressBar.getPaddingLeft() - progressBar.getPaddingRight();
                 float thumbX = progressBar.getPaddingLeft() + (availableWidth * (float) prog / 100f);
                 layoutTooltip.setTranslationX(thumbX - (layoutTooltip.getWidth() / 2f));
@@ -1108,6 +1209,8 @@ public class PlayerActivity extends AppCompatActivity {
     private void updateLyric(long currentPos) {
         if (lyricAdapter.getItemCount() == 0) return;
         
+        long adjustedPos = currentPos - currentLyricOffsetMs;
+
         // 注意：因为 LyricAdapter 内部在 setLyrics 时在开头加了一个空行，
         // 这里的原始数据索引需要对应调整。
         List<LyricAdapter.LyricLine> rawLyrics = lyricAdapter.getLyrics();
@@ -1116,7 +1219,7 @@ public class PlayerActivity extends AppCompatActivity {
         int activeIdx = -1;
         // 注意：i 从 1 开始，避开前置空行；i 到 size-1 结束，避开后置空行
         for (int i = 1; i < rawLyrics.size() - 1; i++) {
-            if (currentPos >= rawLyrics.get(i).timeMs) {
+            if (adjustedPos >= rawLyrics.get(i).timeMs) {
                 activeIdx = i;
             } else {
                 break;
@@ -1145,12 +1248,14 @@ public class PlayerActivity extends AppCompatActivity {
     }
 
     private String formatTime(long ms) {
+        if (ms < 0) return "0:00";
         long sec = ms / 1000;
         return String.format("%d:%02d", sec / 60, sec % 60);
     }
 
     private void toggleOptionMenu(boolean show) {
         if (show) {
+            viewFocusedBeforeOptionMenu = getCurrentFocus();
             layoutOptionMenu.setVisibility(View.VISIBLE);
             if (layoutMainContent != null) {
                 layoutMainContent.setDescendantFocusability(android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS);
@@ -1167,6 +1272,10 @@ public class PlayerActivity extends AppCompatActivity {
             layoutOptionMenu.setVisibility(View.GONE);
             if (layoutMainContent != null) {
                 layoutMainContent.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
+            }
+            if (viewFocusedBeforeOptionMenu != null) {
+                viewFocusedBeforeOptionMenu.requestFocus();
+                viewFocusedBeforeOptionMenu = null;
             }
         }
     }
@@ -1192,9 +1301,14 @@ public class PlayerActivity extends AppCompatActivity {
             case "保存当前歌词":
                 // 拼合歌词
                 StringBuilder sb = new StringBuilder();
+                if (currentLyricOffsetMs != 0) {
+                    sb.append("[offset:").append(currentLyricOffsetMs).append("]\n");
+                }
                 List<LyricAdapter.LyricLine> lyricLines = lyricAdapter.getLyrics();
                 for (LyricAdapter.LyricLine l : lyricLines) {
                     if (l.rawLine != null && !l.rawLine.isEmpty()) {
+                        // 如果这一行已经是 offset 标签，我们要跳过它，因为我们在上面统一处理了
+                        if (l.rawLine.toLowerCase().startsWith("[offset:")) continue;
                         sb.append(l.rawLine).append("\n");
                     }
                 }
@@ -1250,9 +1364,6 @@ public class PlayerActivity extends AppCompatActivity {
                         });
                     }).start();
                 } else {
-                    if (scrapedPicUrl != null && !scrapedPicUrl.isEmpty()) {
-                        updates.put("picture", scrapedPicUrl);
-                    }
                     if (!updates.isEmpty()) {
                         updateSongTagsBundle(mediaId, updates);
                     } else {
@@ -1377,8 +1488,41 @@ public class PlayerActivity extends AppCompatActivity {
                             runOnUiThread(() -> {
                                 if (response.isSuccessful()) {
                                     Toast.makeText(PlayerActivity.this, "已保存歌词", Toast.LENGTH_SHORT).show();
-                                    // 保存成功后再次禁用，防止重复提交
+                                    // 保存成功后清除刮削状态，并更新初始偏移量
+                                    scrapedPicUrl = "";
+                                    scrapedArtist = "";
+                                    initialLyricOffsetMs = currentLyricOffsetMs;
                                     optionAdapter.setOptionDisabled("保存当前歌词", true);
+                                    // 即刻在本地更新 Player 的 MediaItem，防止因服务端落盘延迟导致拉取到旧数据
+                                    if (player != null && player.getCurrentMediaItem() != null) {
+                                        androidx.media3.common.MediaItem current = player.getCurrentMediaItem();
+                                        if (current.mediaId.equals(fileName)) {
+                                            androidx.media3.common.MediaMetadata.Builder metaBuilder = current.mediaMetadata.buildUpon();
+                                            
+                                            // 遍历所有更新的数据来构建新的外挂缓存
+                                            for (java.util.Map.Entry<String, String> entry : updates.entrySet()) {
+                                                String k = entry.getKey();
+                                                String v = entry.getValue();
+                                                if (k.equals("scraped_artist") || k.equals("artist")) {
+                                                    metaBuilder.setArtist(v);
+                                                } else if (k.equals("picture") && v != null && v.startsWith("http")) {
+                                                    metaBuilder.setArtworkUri(android.net.Uri.parse(v));
+                                                }
+                                            }
+                                            
+                                            android.os.Bundle extras = current.mediaMetadata.extras != null ? 
+                                                new android.os.Bundle(current.mediaMetadata.extras) : new android.os.Bundle();
+                                            if (updates.containsKey("lyrics")) {
+                                                extras.putString("lyrics", updates.get("lyrics"));
+                                            }
+                                            metaBuilder.setExtras(extras);
+                                            
+                                            androidx.media3.common.MediaItem newItem = current.buildUpon()
+                                                .setMediaMetadata(metaBuilder.build())
+                                                .build();
+                                            player.replaceMediaItem(player.getCurrentMediaItemIndex(), newItem);
+                                        }
+                                    }
                                 } else {
                                     Toast.makeText(PlayerActivity.this, "更新失败: " + response.code(), Toast.LENGTH_SHORT).show();
                                 }

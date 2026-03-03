@@ -136,6 +136,25 @@ public class MusicService extends MediaSessionService {
         mediaSession = new MediaSession.Builder(this, player)
                 .setSessionActivity(pendingIntent)
                 .setId("cc.ganhualin.xiaomusictv.session")
+                .setCallback(new MediaSession.Callback() {
+                    @Override
+                    public com.google.common.util.concurrent.ListenableFuture<androidx.media3.session.SessionResult> onCustomCommand(
+                            MediaSession session, 
+                            MediaSession.ControllerInfo controller, 
+                            androidx.media3.session.SessionCommand customCommand, 
+                            android.os.Bundle args) {
+                        if ("REFRESH_METADATA".equals(customCommand.customAction)) {
+                            MediaItem current = player.getCurrentMediaItem();
+                            if (current != null) {
+                                forceEnrichMetadata(current);
+                            }
+                            return com.google.common.util.concurrent.Futures.immediateFuture(
+                                new androidx.media3.session.SessionResult(androidx.media3.session.SessionResult.RESULT_SUCCESS));
+                        }
+                        return com.google.common.util.concurrent.Futures.immediateFuture(
+                            new androidx.media3.session.SessionResult(androidx.media3.session.SessionResult.RESULT_ERROR_NOT_SUPPORTED));
+                    }
+                })
                 .build();
         
         // Ensure session persists even if controller is disconnected
@@ -154,7 +173,10 @@ public class MusicService extends MediaSessionService {
         if ((mediaItem.mediaMetadata.artworkUri != null || mediaItem.mediaMetadata.artworkData != null) && mediaItem.mediaMetadata.artist != null) {
             return; 
         }
+        forceEnrichMetadata(mediaItem);
+    }
 
+    private void forceEnrichMetadata(MediaItem mediaItem) {
         String songName = mediaItem.mediaId;
         if (mediaItem.mediaMetadata.extras != null) {
             String original = mediaItem.mediaMetadata.extras.getString("original_name");
