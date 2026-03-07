@@ -255,14 +255,28 @@ public class MusicService extends MediaSessionService {
         MediaItem current = player.getCurrentMediaItem();
         if (current != null && current.mediaId.equals(mediaItem.mediaId)) {
             MediaMetadata.Builder metaBuilder = current.mediaMetadata.buildUpon();
-            if (artist != null && !artist.isEmpty()) metaBuilder.setArtist(artist);
+            CharSequence oldArtist = current.mediaMetadata.artist;
+            if (artist != null && !artist.isEmpty()) {
+                if (oldArtist == null || oldArtist.toString().isEmpty() || oldArtist.toString().equals("未知艺术家") || oldArtist.toString().equals("加载中...")) {
+                    metaBuilder.setArtist(artist);
+                }
+            }
             if (album != null && !album.isEmpty()) metaBuilder.setAlbumTitle(album);
 
             if (pic != null && !pic.isEmpty()) metaBuilder.setArtworkUri(android.net.Uri.parse(pic));
             
             android.os.Bundle extras = current.mediaMetadata.extras != null ? 
                 new android.os.Bundle(current.mediaMetadata.extras) : new android.os.Bundle();
-            if (lyrics != null && !lyrics.isEmpty()) extras.putString("lyrics", lyrics);
+                
+            if (lyrics != null && !lyrics.isEmpty()) {
+                CharSequence currentArtist = metaBuilder.build().artist;
+                if (currentArtist != null && !currentArtist.toString().isEmpty() 
+                        && !currentArtist.toString().equals("未知艺术家") && !currentArtist.toString().equals("加载中...")) {
+                    lyrics = lyrics.replaceAll("(?i)\\[ar:[^\\]]*\\]\\r?\\n?", "");
+                    lyrics = "[ar:" + currentArtist.toString() + "]\n" + lyrics;
+                }
+                extras.putString("lyrics", lyrics);
+            }
             metaBuilder.setExtras(extras);
             
             MediaItem newItem = current.buildUpon()

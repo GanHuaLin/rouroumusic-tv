@@ -819,12 +819,30 @@ public class PlayerActivity extends AppCompatActivity {
             prefs.edit().putString("current_song_name", queryName).apply();
         }
         
+        String primaryArtist = mediaItem.mediaMetadata.artist != null ? mediaItem.mediaMetadata.artist.toString() : "";
+        if (primaryArtist.equals("未知艺术家") || primaryArtist.equals("加载中...")) {
+            primaryArtist = "";
+        }
+        
+        String lyricArtist = "";
+        if (lyrics != null && !lyrics.isEmpty()) {
+            lyricArtist = extractArtistFromLyrics(lyrics);
+            if (lyricArtist == null) lyricArtist = "";
+        }
+        
+        String displayArtist = "";
+        if (!primaryArtist.isEmpty()) {
+            displayArtist = primaryArtist;
+        } else if (!lyricArtist.isEmpty()) {
+            displayArtist = lyricArtist;
+        }
+        
         if (title != null) {
             tvBigTitle.setText(title);
-            tvBigArtist.setText(mediaItem.mediaMetadata.artist != null ? mediaItem.mediaMetadata.artist : "");
+            tvBigArtist.setText(!displayArtist.isEmpty() ? displayArtist : "");
         } else if (queryName != null) {
             tvBigTitle.setText(queryName);
-            tvBigArtist.setText("加载中...");
+            tvBigArtist.setText(!displayArtist.isEmpty() ? displayArtist : "加载中...");
         }
 
         // 1. 处理歌词状态
@@ -834,10 +852,6 @@ public class PlayerActivity extends AppCompatActivity {
         currentLyricOffsetMs = 0; // 重置偏移量，等待 parseLyrics 从文件标签中读取值
         
         if (hasLyrics) {
-            String lyricArtist = extractArtistFromLyrics(lyrics);
-            if (lyricArtist != null && !lyricArtist.isEmpty()) {
-                tvBigArtist.setText(lyricArtist);
-            }
             parseLyrics(lyrics);
             // 解析完歌词后，currentLyricOffsetMs 可能会被 parseLyrics 里的 [offset:] 标签更新
             initialLyricOffsetMs = currentLyricOffsetMs; 
@@ -944,8 +958,19 @@ public class PlayerActivity extends AppCompatActivity {
                             return;
                         }
 
-                        // 更新 UI：歌手
-                        if (!artist.isEmpty()) tvBigArtist.setText(artist);
+                        // 更新 UI：歌手（优先级：tags.artist > 歌词里的歌手名）
+                        String displayArt = artist;
+                        if (displayArt.isEmpty() || displayArt.equals("未知艺术家")) {
+                            if (lyrics != null && !lyrics.isEmpty()) {
+                                String lrcArt = extractArtistFromLyrics(lyrics);
+                                if (lrcArt != null && !lrcArt.isEmpty()) {
+                                    displayArt = lrcArt;
+                                }
+                            }
+                        }
+                        if (!displayArt.isEmpty()) {
+                            tvBigArtist.setText(displayArt);
+                        }
                         
                         // 更新 UI：封面
                         if (pic != null && !pic.isEmpty()) {
@@ -1011,9 +1036,21 @@ public class PlayerActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     handler.removeCallbacks(scrapeTimeoutRunnable);
                     Log.d(TAG, "第三方刮削成功，正在更新 UI。图片地址: " + picUrl);
-                    // 更新歌手
-                    if (artist != null && !artist.isEmpty()) {
-                        tvBigArtist.setText(artist);
+                    // 更新歌手（前面逻辑未匹配到合法歌手才会使用刮削到的歌手或刮削到的歌词里的歌手）
+                    String displayArt = artist != null ? artist : "";
+                    if (displayArt.isEmpty() || displayArt.equals("未知艺术家")) {
+                        if (lyrics != null && !lyrics.isEmpty()) {
+                            String lrcArt = extractArtistFromLyrics(lyrics);
+                            if (lrcArt != null && !lrcArt.isEmpty()) {
+                                displayArt = lrcArt;
+                            }
+                        }
+                    }
+                    if (!displayArt.isEmpty()) {
+                        String currentArtist = tvBigArtist.getText().toString();
+                        if (currentArtist.isEmpty() || currentArtist.equals("加载中...") || currentArtist.equals("未知艺术家")) {
+                            tvBigArtist.setText(displayArt);
+                        }
                     }
                     
                     // 更新封面
@@ -1416,7 +1453,8 @@ public class PlayerActivity extends AppCompatActivity {
                     body.put("year", getStringOrEmpty(tags, "year"));
                     body.put("genre", getStringOrEmpty(tags, "genre"));
                     body.put("lyrics", getStringOrEmpty(tags, "lyrics"));
-                    body.put("picture", getStringOrEmpty(tags, "picture"));
+                    
+
                     
                     // 覆写需要修改的那个字段
                     body.put(key, value);
@@ -1467,18 +1505,39 @@ public class PlayerActivity extends AppCompatActivity {
                     body.put("year", getStringOrEmpty(tags, "year"));
                     body.put("genre", getStringOrEmpty(tags, "genre"));
                     body.put("lyrics", getStringOrEmpty(tags, "lyrics"));
-                    body.put("picture", getStringOrEmpty(tags, "picture"));
                     
+
+                    
+                    String oldArtist = getStringOrEmpty(tags, "artist");
+                    if (oldArtist.isEmpty() || oldArtist.equals("未知艺术家")) {
+                        String oldLyrics = getStringOrEmpty(tags, "lyrics");
+                        if (!oldLyrics.isEmpty()) {
+                            String lrcArt = extractArtistFromLyrics(oldLyrics);
+                            if (lrcArt != null && !lrcArt.isEmpty()) {
+                                oldArtist = lrcArt;
+                            }
+                        }
+                    }
+
                     // 应用所有更新
                     for (java.util.Map.Entry<String, String> entry : updates.entrySet()) {
-                        if (entry.getKey().equals("scraped_artist")) {
-                            // 只有当原始 artist 为空或未知时，才覆盖
-                            String oldArtist = getStringOrEmpty(tags, "artist");
+                        String k = entry.getKey();
+                        String v = entry.getValue();
+                        
+                        if (k.equals("scraped_artist")) {
+                            // 只有当原始 artist 和原歌词都获取不到合法歌手时，才用刮削歌手覆盖 tags.artist
                             if (oldArtist.isEmpty() || oldArtist.equals("未知艺术家")) {
-                                body.put("artist", entry.getValue());
+                                body.put("artist", v);
                             }
+                        } else if (k.equals("lyrics")) {
+                            // 如果原有合法的歌手存在，我们要保证新上传的歌词里的 [ar:XXX] 是原有的歌手名，而不是刮削到的
+                            if (!oldArtist.isEmpty() && !oldArtist.equals("未知艺术家")) {
+                                v = v.replaceAll("(?i)\\[ar:[^\\]]*\\]\\r?\\n?", "");
+                                v = "[ar:" + oldArtist + "]\n" + v;
+                            }
+                            body.put(k, v);
                         } else {
-                            body.put(entry.getKey(), entry.getValue());
+                            body.put(k, v);
                         }
                     }
                     

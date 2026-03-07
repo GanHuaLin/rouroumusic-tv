@@ -713,7 +713,6 @@ public class LibraryActivity extends AppCompatActivity {
                     .setUri(fakeUri)
                     .setMediaMetadata(new androidx.media3.common.MediaMetadata.Builder()
                             .setTitle(songName)
-                            .setArtist(currentPlaylistName)
                             .setExtras(extras)
                             .build())
                     .build();
