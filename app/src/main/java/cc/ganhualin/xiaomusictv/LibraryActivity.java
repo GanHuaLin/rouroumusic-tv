@@ -439,16 +439,19 @@ public class LibraryActivity extends AppCompatActivity {
             }
         });
 
-        songAdapter.setOnItemClickListener((song, position) -> playSongAtIndex(position));
-        songAdapter.setOnActionClickListener(new SongAdapter.OnActionClickListener() {
-            @Override public void onPlay(String song, int position) {
-                if (player != null && player.getCurrentMediaItem() != null && song.equals(player.getCurrentMediaItem().mediaMetadata.title)) {
-                    if (player.isPlaying()) player.pause(); else player.play();
-                } else playSongAtIndex(position);
+        songAdapter.setOnItemClickListener((song, position) -> {
+            if (player != null && player.getCurrentMediaItem() != null 
+                && player.getCurrentMediaItem().mediaMetadata.title != null
+                && song.equals(player.getCurrentMediaItem().mediaMetadata.title.toString())) {
+                if (player.isPlaying()) player.pause(); else player.play();
+            } else {
+                playSongAtIndex(position);
             }
+        });
+        songAdapter.setOnActionClickListener(new SongAdapter.OnActionClickListener() {
             @Override public void onFullscreen(String song, int position) {
                 lastFocusedSongIndex = position; // Record position before leaving
-                if (player == null || player.getCurrentMediaItem() == null || !song.equals(player.getCurrentMediaItem().mediaMetadata.title)) playSongAtIndex(position);
+                if (player == null || player.getCurrentMediaItem() == null || player.getCurrentMediaItem().mediaMetadata.title == null || !song.equals(player.getCurrentMediaItem().mediaMetadata.title.toString())) playSongAtIndex(position);
                 startActivity(new Intent(LibraryActivity.this, PlayerActivity.class));
             }
             @Override public void onFav(String song, int position) { toggleFavorite(song); }

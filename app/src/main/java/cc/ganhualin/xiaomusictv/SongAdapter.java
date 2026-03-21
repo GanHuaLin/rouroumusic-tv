@@ -52,7 +52,6 @@ public class SongAdapter extends RecyclerView.Adapter<SongAdapter.ViewHolder> {
     }
     
     public interface OnActionClickListener {
-        void onPlay(String song, int position);
         void onFullscreen(String song, int position);
         void onFav(String song, int position);
         void onDelete(String song, int position);
@@ -133,22 +132,15 @@ public class SongAdapter extends RecyclerView.Adapter<SongAdapter.ViewHolder> {
             if (holder.ivEqualizer.getDrawable() instanceof AnimationDrawable) {
                 AnimationDrawable anim = (AnimationDrawable) holder.ivEqualizer.getDrawable();
                 if (isPlayerPlaying) {
-                     holder.btnItemPlay.setImageResource(R.drawable.ic_pause);
                      anim.start();
                 } else {
-                     holder.btnItemPlay.setImageResource(R.drawable.ic_play);
                      anim.stop();
                      if (anim.getNumberOfFrames() > 0) anim.selectDrawable(0);
                 }
-            } else {
-                // Fallback for static drawable if used
-                 if (isPlayerPlaying) holder.btnItemPlay.setImageResource(R.drawable.ic_pause);
-                 else holder.btnItemPlay.setImageResource(R.drawable.ic_play);
             }
             
         } else {
             holder.tvSongName.setTextColor(0xFFF3F4F6); // White
-            holder.btnItemPlay.setImageResource(R.drawable.ic_play);
             
             // Show number
             holder.tvIndex.setVisibility(View.VISIBLE);
@@ -169,9 +161,6 @@ public class SongAdapter extends RecyclerView.Adapter<SongAdapter.ViewHolder> {
         });
         
         // Action Buttons
-        holder.btnItemPlay.setOnClickListener(v -> {
-            if (actionListener != null) actionListener.onPlay(song, position);
-        });
         holder.btnItemFullscreen.setOnClickListener(v -> {
             if (actionListener != null) actionListener.onFullscreen(song, position);
         });
@@ -295,7 +284,7 @@ public class SongAdapter extends RecyclerView.Adapter<SongAdapter.ViewHolder> {
         TextView tvSongName;
         TextView tvArtist;
         ImageView ivCover;
-        ImageButton btnItemPlay, btnItemFullscreen, btnItemFav, btnItemDelete;
+        ImageButton btnItemFullscreen, btnItemFav, btnItemDelete;
 
         ViewHolder(View itemView) {
             super(itemView);
@@ -305,7 +294,6 @@ public class SongAdapter extends RecyclerView.Adapter<SongAdapter.ViewHolder> {
             tvSongName = itemView.findViewById(R.id.tvSongName);
             tvArtist = itemView.findViewById(R.id.tvArtist);
             ivCover = itemView.findViewById(R.id.ivCover);
-            btnItemPlay = itemView.findViewById(R.id.btnItemPlay);
             btnItemFullscreen = itemView.findViewById(R.id.btnItemFullscreen);
             btnItemFav = itemView.findViewById(R.id.btnItemFav);
             btnItemDelete = itemView.findViewById(R.id.btnItemDelete);

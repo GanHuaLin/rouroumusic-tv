@@ -12,7 +12,7 @@
     android:clickable="true"
     android:focusable="true"
     android:nextFocusLeft="@+id/rvPlaylists"
-    android:descendantFocusability="afterDescendants">
+    android:nextFocusRight="@+id/btnItemFullscreen">
 
     <FrameLayout
         android:layout_width="32dp"
@@ -93,19 +93,6 @@
         android:layout_marginStart="8dp">
 
         <ImageButton
-            android:id="@+id/btnItemPlay"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:layout_marginEnd="4dp"
-            android:background="@drawable/btn_focused_circle"
-            android:src="@drawable/ic_play"
-            android:scaleType="fitCenter"
-            android:padding="6dp"
-            android:tint="#E5E7EB"
-            android:focusable="true"
-            android:contentDescription="play"/>
-
-        <ImageButton
             android:id="@+id/btnItemFullscreen"
             android:layout_width="32dp"
             android:layout_height="32dp"
@@ -116,6 +103,7 @@
             android:padding="6dp"
             android:tint="#E5E7EB"
             android:focusable="true"
+            android:nextFocusLeft="@+id/item_song_root"
             android:contentDescription="fullscreen"/>
 
         <ImageButton
