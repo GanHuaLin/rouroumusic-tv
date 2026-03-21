@@ -21,11 +21,11 @@ https://github.com/GanHuaLin/rouroumusic-tv
 
 ---
 
-## 🆕 最新版本功能 (v1.0.6)
+## 🆕 最新版本功能 (v1.0.7)
 
-- **新增**：全屏播放界面新增歌词延时微调功能。
-- **优化**：完善歌词封面的保存逻辑；关闭菜单增加焦点回落机制。
-- **修复**：修复偶尔出现的播放进度负数报错和焦点丢失异常。
+- **交互优化**：移除播放列表独立的播放按钮，将其与整行点击（播放/暂停）逻辑合并。
+- **体验优化**：优化 TV 端遥控器的焦点导航（修复列表内焦点跳转异常）。
+- **功能修复**：增强媒体对象判空保护，修复偶发的点击闪退缺陷。
 
 > 详细的更新日志请查看 [CHANGELOG.md](CHANGELOG.md)
 
@@ -36,6 +36,8 @@ https://github.com/GanHuaLin/rouroumusic-tv
 | 快速登录 | 歌曲列表 | 播放界面 |
 | :---: | :---: | :---: |
 | <img src="1.login-page.png" width="300"> | <img src="2.list-page.png" width="300"> | <img src="3.player-page.png" width="300"> |
+| **播放列表** | **功能菜单** |  |
+| <img src="4.player-page-list.png" width="300"> | <img src="5.player-page-menu.png" width="300"> |  |
 
 ---
 
