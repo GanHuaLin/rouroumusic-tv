@@ -21,11 +21,9 @@ https://github.com/GanHuaLin/rouroumusic-tv
 
 ---
 
-## 🆕 最新版本功能 (v1.0.7)
+## 🆕 最新版本功能 (v1.0.8)
 
-- **交互优化**：移除播放列表独立的播放按钮，将其与整行点击（播放/暂停）逻辑合并。
-- **体验优化**：优化 TV 端遥控器的焦点导航（修复列表内焦点跳转异常）。
-- **功能修复**：增强媒体对象判空保护，修复偶发的点击闪退缺陷。
+- **配置优化**：降低应用要求的最低系统版本限制，全面支持 Android 6.0 (API Level 23) 设备。
 
 > 详细的更新日志请查看 [CHANGELOG.md](CHANGELOG.md)
 
@@ -71,7 +69,7 @@ https://github.com/GanHuaLin/rouroumusic-tv
 4. 使用 Android Studio 的 `Build -> Build Bundle(s) / APK(s) -> Build APK(s)` 生成 APK。
 
 **项目要求：**
-- Android SDK 21 (Android 5.0) 或更高。
+- Android SDK 23 (Android 6.0) 或更高。
 - Android Studio Chipmunk 或更高版本。
 
 ---
