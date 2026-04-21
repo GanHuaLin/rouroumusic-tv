@@ -21,9 +21,12 @@ https://github.com/GanHuaLin/rouroumusic-tv
 
 ---
 
-## 🆕 最新版本功能 (v1.0.8)
+## 🆕 最新版本功能 (v1.0.9)
 
-- **配置优化**：降低应用要求的最低系统版本限制，全面支持 Android 6.0 (API Level 23) 设备。
+- **触屏适配**：播放界面新增点击背景切换控制栏的交互，方便无遥控器的触屏设备使用。
+- **界面优化**：配置页面左右面板改为可滚动布局，小屏/低分辨率设备上也能完整操作。
+- **兼容性修复**：调整集合 API 调用方式，修复低版本系统运行异常。
+- **配置调整**：最低系统版本进一步下调至 Android 5.1 (API Level 22)，覆盖更多老旧设备。
 
 > 详细的更新日志请查看 [CHANGELOG.md](CHANGELOG.md)
 
@@ -69,7 +72,7 @@ https://github.com/GanHuaLin/rouroumusic-tv
 4. 使用 Android Studio 的 `Build -> Build Bundle(s) / APK(s) -> Build APK(s)` 生成 APK。
 
 **项目要求：**
-- Android SDK 23 (Android 6.0) 或更高。
+- Android SDK 22 (Android 5.1) 或更高。
 - Android Studio Chipmunk 或更高版本。
 
 ---

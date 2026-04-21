@@ -185,6 +185,18 @@ public class PlayerActivity extends AppCompatActivity {
         layoutBottomControls = findViewById(R.id.layoutBottomControls);
         layoutOptionMenu = findViewById(R.id.layoutOptionMenu);
         rvOptions = findViewById(R.id.rvOptions);
+
+        // Tap on background area toggles controls (for touch devices without remote)
+        layoutMainContent.setOnClickListener(v -> {
+            if (isControlsVisible()) {
+                hideBottomControls();
+            } else {
+                showBottomControls();
+            }
+        });
+        // Absorb taps on control bar empty area so they don't toggle; keep controls alive instead
+        layoutBottomControls.setClickable(true);
+        layoutBottomControls.setOnClickListener(v -> resetControlsTimer());
         
         rvDrawerSongs = findViewById(R.id.rvDrawerSongs);
         

@@ -79,7 +79,7 @@ public class DrawerSongAdapter extends RecyclerView.Adapter<DrawerSongAdapter.Vi
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         String song = songs.get(position);
         holder.tvTitle.setText(song);
-        holder.tvArtist.setText(artistCache.getOrDefault(song, "加载中..."));
+         holder.tvArtist.setText(artistCache.containsKey(song) ? artistCache.get(song) : "加载中...");
 
         boolean isPlaying = (position == playingIndex);
         

@@ -6,57 +6,67 @@
     android:background="@drawable/bg_app_gradient">
 
     <!-- Left Panel: Branding -->
-    <LinearLayout
+    <ScrollView
         android:id="@+id/panelLeft"
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:padding="48dp"
+        android:fillViewport="true"
+        android:scrollbars="none"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintWidth_percent="0.42"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent">
 
-        <ImageView
-            android:layout_width="96dp"
-            android:layout_height="96dp"
-            android:src="@drawable/ic_logo"
-            android:contentDescription="Logo"
-            android:layout_marginBottom="24dp" />
-
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="肉肉音乐"
-            android:textColor="#FFFFFF"
-            android:textSize="40sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="12dp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="连接你的音乐服务（XiaoMusic）"
-            android:textColor="#9CA3AF"
-            android:textSize="16sp"
+            android:orientation="vertical"
             android:gravity="center"
-            android:layout_marginBottom="40dp" />
-
-        <!-- Mode Toggle Button -->
-        <Button
-            android:id="@+id/btnToggleMode"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="扫码登录"
-            android:textColor="#FFFFFF"
-            android:background="@drawable/bg_btn_primary"
             android:paddingStart="24dp"
             android:paddingEnd="24dp"
-            android:focusable="true"
-            android:nextFocusRight="@+id/etUrl" />
+            android:paddingTop="24dp"
+            android:paddingBottom="24dp">
 
-    </LinearLayout>
+            <ImageView
+                android:layout_width="96dp"
+                android:layout_height="96dp"
+                android:src="@drawable/ic_logo"
+                android:contentDescription="Logo"
+                android:layout_marginBottom="20dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="肉肉音乐"
+                android:textColor="#FFFFFF"
+                android:textSize="36sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="10dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="连接你的音乐服务（XiaoMusic）"
+                android:textColor="#9CA3AF"
+                android:textSize="14sp"
+                android:gravity="center"
+                android:layout_marginBottom="24dp" />
+
+            <!-- Mode Toggle Button -->
+            <Button
+                android:id="@+id/btnToggleMode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="扫码登录"
+                android:textColor="#FFFFFF"
+                android:background="@drawable/bg_btn_primary"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:focusable="true"
+                android:nextFocusRight="@+id/etUrl" />
+
+        </LinearLayout>
+    </ScrollView>
 
     <!-- Divider -->
     <View
@@ -71,18 +81,26 @@
         app:layout_constraintBottom_toBottomOf="parent" />
 
     <!-- Right Panel: Form -->
-    <LinearLayout
+    <ScrollView
         android:id="@+id/panelRight"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:paddingStart="56dp"
-        android:paddingEnd="56dp"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:scrollbars="none"
+        android:paddingStart="40dp"
+        android:paddingEnd="40dp"
         app:layout_constraintStart_toEndOf="@+id/divider"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:paddingTop="16dp"
+            android:paddingBottom="16dp">
 
         <!-- Manual Login Container -->
         <LinearLayout
@@ -249,5 +267,6 @@
         </LinearLayout>
 
     </LinearLayout>
+    </ScrollView>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

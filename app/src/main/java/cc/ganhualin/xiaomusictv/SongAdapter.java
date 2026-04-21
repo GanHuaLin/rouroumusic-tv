@@ -117,7 +117,7 @@ public class SongAdapter extends RecyclerView.Adapter<SongAdapter.ViewHolder> {
         String song = songs.get(position);
         holder.tvIndex.setText(String.valueOf(position + 1));
         holder.tvSongName.setText(song);
-        holder.tvArtist.setText(artistCache.getOrDefault(song, "加载中..."));
+         holder.tvArtist.setText(artistCache.containsKey(song) ? artistCache.get(song) : "加载中...");
 
         // Highlight playing song
         if (position == playingIndex) {
